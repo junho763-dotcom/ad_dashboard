@@ -240,23 +240,53 @@
     display: block; cursor: pointer;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 100%;
-    transition: white-space .1s;
   }
-  .ad-name.expanded {
-    white-space: normal; word-break: break-all;
-    overflow: visible; text-overflow: unset;
-    background: var(--green-50);
-    border-radius: 4px; padding: 3px 5px; margin: -3px -5px;
-  }
+  .ad-name:hover { color: var(--green-700); text-decoration: underline dotted; }
   .ad-adset { font-size: 10px; color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; }
-  .copy-btn {
-    display: none; margin-top: 4px;
-    background: var(--green-100); border: none; border-radius: 4px;
-    padding: 2px 8px; font-size: 10px; color: var(--green-700);
-    cursor: pointer; font-weight: 600;
+  .copy-btn { display: none; }
+
+  /* 광고명 팝업 오버레이 */
+  .name-popup-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,.35);
+    align-items: center; justify-content: center;
   }
-  .copy-btn:hover { background: var(--green-700); color: #fff; }
-  .ad-name.expanded ~ .copy-btn { display: inline-block; }
+  .name-popup-overlay.show { display: flex; }
+  .name-popup {
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    padding: 1.5rem 1.75rem;
+    max-width: 640px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  }
+  .name-popup-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .5rem; }
+  .name-popup-text {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    word-break: break-all; line-height: 1.6;
+    background: var(--bg); border-radius: 8px;
+    padding: .75rem 1rem; margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    user-select: all;
+  }
+  .name-popup-meta { font-size: 12px; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.5; }
+  .name-popup-actions { display: flex; gap: 8px; }
+  .popup-copy-btn {
+    flex: 1; padding: 10px; border-radius: 8px;
+    background: var(--green-700); color: #fff;
+    border: none; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .12s;
+  }
+  .popup-copy-btn:hover { background: var(--green-500); }
+  .popup-copy-btn.copied { background: var(--navy); }
+  .popup-close-btn {
+    padding: 10px 18px; border-radius: 8px;
+    background: var(--bg); color: var(--muted);
+    border: 1px solid var(--border); font-size: 13px;
+    cursor: pointer; transition: background .12s;
+  }
+  .popup-close-btn:hover { background: var(--border); }
   .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
   .tag-med  { background: #e8edf5; color: #16213e; }
   .tag-hc   { background: var(--green-100); color: var(--green-700); }
@@ -357,6 +387,19 @@
 
 <!-- DASHBOARD -->
 <div class="dashboard" id="dashboard">
+
+  <!-- 광고명 팝업 -->
+  <div class="name-popup-overlay" id="name-popup-overlay" onclick="closeNamePopup(event)">
+    <div class="name-popup">
+      <div class="name-popup-label">광고명 전체</div>
+      <div class="name-popup-text" id="popup-name-text"></div>
+      <div class="name-popup-meta" id="popup-name-meta"></div>
+      <div class="name-popup-actions">
+        <button class="popup-copy-btn" id="popup-copy-btn" onclick="popupCopy()">클립보드에 복사</button>
+        <button class="popup-close-btn" onclick="closeNamePopup()">닫기</button>
+      </div>
+    </div>
+  </div>
 
   <!-- KPI -->
   <div class="kpi-strip" id="kpi-strip"></div>
@@ -865,10 +908,15 @@ function renderTable(rows) {
       if (r.startDate) periodDisp += `<br><span style="font-size:10px;color:var(--muted)">${r.startDate}</span>`;
     }
 
+    const safeName = r.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const safeAdset = r.adset.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
     return `<tr class="${r.adStatus === 'off' ? 'row-off' : ''}">
       <td style="min-width:0;max-width:260px">
-        <span class="ad-name" title="클릭하면 전체 이름 펼치기" onclick="toggleName(this)">${r.name}</span>
-        <button class="copy-btn" onclick="copyName(this, '${r.name.replace(/'/g,"\\'")}')">복사</button>
+        <span class="ad-name"
+          onclick="openNamePopup('${r.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${r.product}','${r.div}','${r.adset.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+          ${r.name}
+        </span>
         <span class="ad-adset">${r.product} · ${r.div}</span>
       </td>
       <td style="font-size:11px">${r.product}</td>
@@ -884,23 +932,37 @@ function renderTable(rows) {
   }).join('');
 }
 
-/* ── 이벤트 바인딩 ── */
-function toggleName(el) {
-  el.classList.toggle('expanded');
+/* ── 광고명 팝업 ── */
+let _currentPopupName = '';
+function openNamePopup(name, product, div, adset) {
+  _currentPopupName = name;
+  document.getElementById('popup-name-text').textContent = name;
+  document.getElementById('popup-name-meta').innerHTML =
+    `<strong>상품:</strong> ${product} &nbsp;·&nbsp; <strong>사업부:</strong> ${div}<br><strong>광고세트:</strong> ${adset}`;
+  const btn = document.getElementById('popup-copy-btn');
+  btn.textContent = '클립보드에 복사';
+  btn.classList.remove('copied');
+  document.getElementById('name-popup-overlay').classList.add('show');
 }
-function copyName(btn, name) {
-  navigator.clipboard.writeText(name).then(() => {
-    const orig = btn.textContent;
+function closeNamePopup(e) {
+  if (!e || e.target === document.getElementById('name-popup-overlay')) {
+    document.getElementById('name-popup-overlay').classList.remove('show');
+  }
+}
+function popupCopy() {
+  navigator.clipboard.writeText(_currentPopupName).then(() => {
+    const btn = document.getElementById('popup-copy-btn');
     btn.textContent = '복사됨 ✓';
-    btn.style.background = 'var(--green-700)';
-    btn.style.color = '#fff';
+    btn.classList.add('copied');
     setTimeout(() => {
-      btn.textContent = orig;
-      btn.style.background = '';
-      btn.style.color = '';
-    }, 1500);
+      btn.textContent = '클립보드에 복사';
+      btn.classList.remove('copied');
+    }, 2000);
   });
 }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeNamePopup({ target: document.getElementById('name-popup-overlay') });
+});
 function bindUpload(inputId) {
   document.getElementById(inputId).addEventListener('change', e => {
     if (e.target.files[0]) parseFile(e.target.files[0]);
