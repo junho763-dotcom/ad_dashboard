@@ -637,13 +637,17 @@ function parseFile(file) {
           if (cm.startDate && r[cm.startDate]) {
             const sdRaw = String(r[cm.startDate]).trim();
             const edRaw = cm.endDate ? String(r[cm.endDate] || '').trim() : '';
-            const sd = new Date(sdRaw);
-            // 종료일: '진행 중' 또는 비어있으면 오늘 기준
-            const isOngoing = !edRaw || edRaw.includes('진행') || edRaw === '-';
-            const ed = isOngoing ? new Date() : new Date(edRaw);
-            if (!isNaN(sd.getTime())) {
-              startDate = sd.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
-              endDate   = isOngoing ? '진행중' : (!isNaN(ed.getTime()) ? ed.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' }) : '');
+            // YYYY-MM-DD 파싱 (타임존 안전하게 수동 파싱)
+            const parseDate = s => {
+              const m = s.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+              return m ? new Date(+m[1], +m[2]-1, +m[3]) : null;
+            };
+            const sd = parseDate(sdRaw);
+            const isOngoing = !edRaw || edRaw.includes('진행') || edRaw === '-' || edRaw === '';
+            const ed = isOngoing ? new Date() : (parseDate(edRaw) || new Date());
+            if (sd) {
+              startDate = `${String(sd.getMonth()+1).padStart(2,'0')}.${String(sd.getDate()).padStart(2,'0')}`;
+              endDate   = isOngoing ? '진행중' : `${String(ed.getMonth()+1).padStart(2,'0')}.${String(ed.getDate()).padStart(2,'0')}`;
               runDays   = Math.max(1, Math.round((ed - sd) / (1000 * 60 * 60 * 24)));
             }
           }
@@ -661,6 +665,14 @@ function parseFile(file) {
       buildProductFilter();
       document.getElementById('upload-screen').style.display = 'none';
       document.getElementById('dashboard').style.display     = 'block';
+
+      // 디버그: 컬럼 매핑 및 상태 분포 확인
+      console.log('=== 컬럼 매핑 결과 ===', cm);
+      const statusDist = {};
+      allRows.forEach(r => { statusDist[r.adStatus] = (statusDist[r.adStatus]||0)+1; });
+      console.log('=== 게재 상태 분포 ===', statusDist);
+      console.log('전체 소재 수:', allRows.length);
+
       applyFilters();
     } catch (err) {
       alert('파일 파싱 오류: ' + err.message);
@@ -891,7 +903,16 @@ const IMP_TIER_LABEL = {
 function renderTable(rows) {
   const tbody = document.getElementById('table-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">조건에 맞는 소재가 없습니다</td></tr>';
+    const activeFilters = [];
+    if (ctrFilter !== 'all') activeFilters.push(`CTR: ${ctrFilter}`);
+    if (cpcFilter !== 'all') activeFilters.push(`CPC: ${cpcFilter}`);
+    if (spendFilter !== 'all') activeFilters.push(`광고비: ${spendFilter}`);
+    if (impFilter !== 'all') activeFilters.push(`노출: ${impFilter}`);
+    if (statusFilter !== 'all') activeFilters.push(`상태: ${statusFilter}`);
+    if (periodFilter !== 'all') activeFilters.push(`운영기간: ${periodFilter}`);
+    if (judgeFilter !== 'all') activeFilters.push(`판정: ${judgeFilter}`);
+    const filterMsg = activeFilters.length ? `<br><span style="font-size:11px;color:var(--muted)">활성 필터: ${activeFilters.join(' · ')}</span>` : '';
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="10">조건에 맞는 소재가 없습니다${filterMsg}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
