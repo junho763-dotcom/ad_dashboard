@@ -322,9 +322,15 @@
   .status-dot.on      { background: #1db954; box-shadow: 0 0 0 2.5px #c8f5dd; }
   .status-dot.off     { background: #e53935; box-shadow: 0 0 0 2.5px #ffd0d0; }
   .status-dot.unknown { background: #ccc;    box-shadow: 0 0 0 2.5px #eee; }
-  tbody tr.row-off td:not(:first-child) { opacity: 0.5; }
-  tbody tr.row-off td:first-child { opacity: 1; }
-  tbody tr.row-off:hover td { opacity: 1; }
+  tbody tr.row-off { background: #fffafa; }
+  tbody tr.row-off td { color: #aaa; }
+  tbody tr.row-off .status-dot { opacity: 1 !important; }
+  tbody tr.row-off td:nth-child(3) { opacity: 1 !important; }
+  tbody tr.row-off .ad-name { color: #999; }
+  tbody tr.row-off .ad-adset { color: #bbb; }
+  tbody tr.row-off:hover { background: #fff5f5; }
+  tbody tr.row-off:hover td { color: var(--text); }
+  tbody tr.row-off:hover .ad-name { color: var(--text); }
 
   .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
 
