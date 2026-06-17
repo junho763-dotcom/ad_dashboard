@@ -584,28 +584,32 @@ function parseFile(file) {
       const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
       if (!raw.length) { alert('데이터가 없습니다.'); return; }
 
-      /* 컬럼 매핑 */
+      /* 컬럼 매핑 - 우선순위 명확히 */
       const cm = {};
-      Object.keys(raw[0]).forEach(k => {
-        const kl = k.toLowerCase();
-        if (kl.includes('광고 이름') || kl === '광고명' || kl === 'ad name' || kl.includes('ad name')) cm.name   = k;
-        if (kl.includes('광고 세트') || kl.includes('adset') || kl.includes('ad set'))                  cm.adset  = k;
-        if (kl.includes('ctr(전체)') || kl === 'ctr(전체)') cm.ctr  = k;
-        else if (!cm.ctr  && kl.includes('ctr'))  cm.ctr  = k;
-        if (kl.includes('cpc(전체)') || kl === 'cpc(전체) (krw)') cm.cpc  = k;
-        else if (!cm.cpc  && kl.includes('cpc'))  cm.cpc  = k;
-        if (kl.includes('구매 roas') || kl.includes('purchase roas')) cm.roas = k;
-        else if (!cm.roas && kl.includes('roas'))  cm.roas = k;
-        if (kl.includes('지출 금액') || kl.includes('amount spent') || kl.includes('spend')) cm.spend = k;
-        if (kl.includes('노출')     || kl.includes('impression'))    cm.imp   = k;
-        if (kl.includes('클릭(전체)') || kl === '클릭' || kl.includes('clicks')) cm.click = k;
-        // 게재 상태: '광고 게재', '게재', '게재 상태', 'delivery', 'status' 모두 인식
-        if (kl === '광고 게재' || kl === '게재' || kl === '게재 상태' || kl.includes('delivery') || kl === 'status') cm.status = k;
-        // 날짜: '시작' 단독 컬럼 우선, 없으면 '보고 시작'
+      const keys = Object.keys(raw[0]);
+      keys.forEach(k => {
+        const kl = k.toLowerCase().trim();
+        if (!cm.name   && (kl === '광고 이름' || kl === 'ad name' || kl.includes('광고 이름'))) cm.name   = k;
+        if (!cm.adset  && (kl === '광고 세트 이름' || kl.includes('광고 세트') || kl.includes('adset') || kl.includes('ad set'))) cm.adset  = k;
+        if (!cm.ctr    && (kl === 'ctr(전체)' || kl.startsWith('ctr'))) cm.ctr   = k;
+        if (!cm.cpc    && (kl.includes('cpc'))) cm.cpc   = k;
+        if (!cm.roas   && (kl.includes('구매 roas') || kl.includes('purchase roas'))) cm.roas  = k;
+        if (!cm.roas   && kl.includes('roas')) cm.roas  = k;
+        if (!cm.spend  && (kl.includes('지출 금액') || kl.includes('amount spent') || kl === 'spend')) cm.spend = k;
+        if (!cm.imp    && (kl === '노출' || kl.includes('impression'))) cm.imp   = k;
+        if (!cm.click  && (kl.includes('클릭') || kl.includes('click'))) cm.click = k;
+        // 게재 상태: 정확히 '광고 게재' 우선
+        if (!cm.status && kl === '광고 게재') cm.status = k;
+        if (!cm.status && (kl === '게재' || kl === '게재 상태' || kl === 'status' || kl === 'delivery')) cm.status = k;
+        // 날짜: '시작'/'종료' 단독 컬럼 최우선
         if (kl === '시작' || kl === 'start date') cm.startDate = k;
-        else if (!cm.startDate && (kl.includes('보고 시작') || kl.includes('reporting starts'))) cm.startDate = k;
-        if (kl === '종료' || kl === 'end date') cm.endDate = k;
-        else if (!cm.endDate && (kl.includes('보고 종료') || kl.includes('reporting ends'))) cm.endDate = k;
+        if (kl === '종료' || kl === 'end date')   cm.endDate   = k;
+      });
+      // 단독 '시작'/'종료' 없으면 '보고 시작'/'보고 종료' 폴백
+      keys.forEach(k => {
+        const kl = k.toLowerCase().trim();
+        if (!cm.startDate && (kl.includes('보고 시작') || kl.includes('reporting starts'))) cm.startDate = k;
+        if (!cm.endDate   && (kl.includes('보고 종료') || kl.includes('reporting ends')))   cm.endDate   = k;
       });
 
       allRows = raw
@@ -634,17 +638,29 @@ function parseFile(file) {
 
           /* 날짜/운영기간 파싱 */
           let startDate = '', endDate = '', runDays = null;
-          if (cm.startDate && r[cm.startDate]) {
-            const sdRaw = String(r[cm.startDate]).trim();
-            const edRaw = cm.endDate ? String(r[cm.endDate] || '').trim() : '';
-            // YYYY-MM-DD 파싱 (타임존 안전하게 수동 파싱)
-            const parseDate = s => {
+          if (cm.startDate && r[cm.startDate] !== undefined && r[cm.startDate] !== '') {
+            const sdRaw = r[cm.startDate];
+            const edRaw = cm.endDate ? r[cm.endDate] : '';
+
+            // 날짜 파싱 함수: 문자열 YYYY-MM-DD or YYYY.MM.DD, 또는 엑셀 시리얼 숫자 처리
+            const parseDate = val => {
+              if (!val && val !== 0) return null;
+              // 엑셀 시리얼 숫자 (예: 46055)
+              if (typeof val === 'number') {
+                const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+                return isNaN(d.getTime()) ? null : d;
+              }
+              const s = String(val).trim();
+              if (!s || s.includes('진행') || s === '-') return null;
               const m = s.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
               return m ? new Date(+m[1], +m[2]-1, +m[3]) : null;
             };
+
             const sd = parseDate(sdRaw);
-            const isOngoing = !edRaw || edRaw.includes('진행') || edRaw === '-' || edRaw === '';
-            const ed = isOngoing ? new Date() : (parseDate(edRaw) || new Date());
+            const edParsed = parseDate(edRaw);
+            const isOngoing = !edParsed;
+            const ed = isOngoing ? new Date() : edParsed;
+
             if (sd) {
               startDate = `${String(sd.getMonth()+1).padStart(2,'0')}.${String(sd.getDate()).padStart(2,'0')}`;
               endDate   = isOngoing ? '진행중' : `${String(ed.getMonth()+1).padStart(2,'0')}.${String(ed.getDate()).padStart(2,'0')}`;
