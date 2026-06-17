@@ -235,8 +235,28 @@
   tbody tr:hover { background: var(--green-50); }
   tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 
-  .ad-name { font-size: 11px; color: var(--text); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-  .ad-adset { font-size: 10px; color: var(--muted); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; }
+  .ad-name {
+    font-size: 11px; color: var(--text);
+    display: block; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
+    transition: white-space .1s;
+  }
+  .ad-name.expanded {
+    white-space: normal; word-break: break-all;
+    overflow: visible; text-overflow: unset;
+    background: var(--green-50);
+    border-radius: 4px; padding: 3px 5px; margin: -3px -5px;
+  }
+  .ad-adset { font-size: 10px; color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; }
+  .copy-btn {
+    display: none; margin-top: 4px;
+    background: var(--green-100); border: none; border-radius: 4px;
+    padding: 2px 8px; font-size: 10px; color: var(--green-700);
+    cursor: pointer; font-weight: 600;
+  }
+  .copy-btn:hover { background: var(--green-700); color: #fff; }
+  .ad-name.expanded ~ .copy-btn { display: inline-block; }
   .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
   .tag-med  { background: #e8edf5; color: #16213e; }
   .tag-hc   { background: var(--green-100); color: var(--green-700); }
@@ -846,7 +866,11 @@ function renderTable(rows) {
     }
 
     return `<tr class="${r.adStatus === 'off' ? 'row-off' : ''}">
-      <td><span class="ad-name" title="${r.name}">${short}</span><span class="ad-adset ${tagCls}" style="background:none;padding:0;border-radius:0;font-size:10px;color:var(--muted)">${r.product} · ${r.div}</span></td>
+      <td style="min-width:0;max-width:260px">
+        <span class="ad-name" title="클릭하면 전체 이름 펼치기" onclick="toggleName(this)">${r.name}</span>
+        <button class="copy-btn" onclick="copyName(this, '${r.name.replace(/'/g,"\\'")}')">복사</button>
+        <span class="ad-adset">${r.product} · ${r.div}</span>
+      </td>
       <td style="font-size:11px">${r.product}</td>
       <td style="text-align:center">${statusBadge}</td>
       <td>${periodDisp}</td>
@@ -861,6 +885,22 @@ function renderTable(rows) {
 }
 
 /* ── 이벤트 바인딩 ── */
+function toggleName(el) {
+  el.classList.toggle('expanded');
+}
+function copyName(btn, name) {
+  navigator.clipboard.writeText(name).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '복사됨 ✓';
+    btn.style.background = 'var(--green-700)';
+    btn.style.color = '#fff';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 1500);
+  });
+}
 function bindUpload(inputId) {
   document.getElementById(inputId).addEventListener('change', e => {
     if (e.target.files[0]) parseFile(e.target.files[0]);
