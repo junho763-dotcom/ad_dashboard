@@ -598,10 +598,14 @@ function parseFile(file) {
         else if (!cm.roas && kl.includes('roas'))  cm.roas = k;
         if (kl.includes('지출 금액') || kl.includes('amount spent') || kl.includes('spend')) cm.spend = k;
         if (kl.includes('노출')     || kl.includes('impression'))    cm.imp   = k;
-        if (kl.includes('클릭(전체)') || kl.includes('clicks'))      cm.click = k;
-        if (kl.includes('게재') || kl.includes('delivery') || kl === '상태' || kl === 'status') cm.status = k;
-        if (kl.includes('시작') || kl.includes('start date') || kl.includes('reporting starts')) cm.startDate = k;
-        if (kl.includes('종료') || kl.includes('end date')   || kl.includes('reporting ends'))   cm.endDate   = k;
+        if (kl.includes('클릭(전체)') || kl === '클릭' || kl.includes('clicks')) cm.click = k;
+        // 게재 상태: '광고 게재', '게재', '게재 상태', 'delivery', 'status' 모두 인식
+        if (kl === '광고 게재' || kl === '게재' || kl === '게재 상태' || kl.includes('delivery') || kl === 'status') cm.status = k;
+        // 날짜: '시작' 단독 컬럼 우선, 없으면 '보고 시작'
+        if (kl === '시작' || kl === 'start date') cm.startDate = k;
+        else if (!cm.startDate && (kl.includes('보고 시작') || kl.includes('reporting starts'))) cm.startDate = k;
+        if (kl === '종료' || kl === 'end date') cm.endDate = k;
+        else if (!cm.endDate && (kl.includes('보고 종료') || kl.includes('reporting ends'))) cm.endDate = k;
       });
 
       allRows = raw
@@ -615,20 +619,31 @@ function parseFile(file) {
           const imp   = parseFloat(r[cm.imp])   || 0;
 
           /* 게재 상태 파싱 */
-          const rawStatus = String(r[cm.status] || '').toLowerCase();
+          const rawStatus = String(r[cm.status] || '').toLowerCase().trim();
           let adStatus = 'unknown';
-          if (rawStatus.includes('활성') || rawStatus.includes('active') || rawStatus.includes('운영')) adStatus = 'on';
-          else if (rawStatus.includes('비활성') || rawStatus.includes('inactive') || rawStatus.includes('중지') ||
-                   rawStatus.includes('paused') || rawStatus.includes('off') || rawStatus.includes('종료')) adStatus = 'off';
+          if (rawStatus === 'active' || rawStatus.includes('활성') || rawStatus.includes('운영')) {
+            adStatus = 'on';
+          } else if (
+            rawStatus === 'inactive' || rawStatus === 'not_delivering' ||
+            rawStatus === 'archived' || rawStatus === 'deleted' || rawStatus === 'paused' ||
+            rawStatus.includes('비활성') || rawStatus.includes('중지') ||
+            rawStatus.includes('off') || rawStatus.includes('종료') || rawStatus.includes('보관')
+          ) {
+            adStatus = 'off';
+          }
 
           /* 날짜/운영기간 파싱 */
           let startDate = '', endDate = '', runDays = null;
           if (cm.startDate && r[cm.startDate]) {
-            const sd = new Date(r[cm.startDate]);
-            const ed = cm.endDate && r[cm.endDate] ? new Date(r[cm.endDate]) : new Date();
+            const sdRaw = String(r[cm.startDate]).trim();
+            const edRaw = cm.endDate ? String(r[cm.endDate] || '').trim() : '';
+            const sd = new Date(sdRaw);
+            // 종료일: '진행 중' 또는 비어있으면 오늘 기준
+            const isOngoing = !edRaw || edRaw.includes('진행') || edRaw === '-';
+            const ed = isOngoing ? new Date() : new Date(edRaw);
             if (!isNaN(sd.getTime())) {
               startDate = sd.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
-              endDate   = !isNaN(ed.getTime()) ? ed.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' }) : '';
+              endDate   = isOngoing ? '진행중' : (!isNaN(ed.getTime()) ? ed.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' }) : '');
               runDays   = Math.max(1, Math.round((ed - sd) / (1000 * 60 * 60 * 24)));
             }
           }
@@ -904,8 +919,9 @@ function renderTable(rows) {
     let periodDisp = '-';
     if (r.runDays !== null) {
       const periodCls = r.runDays <= 7 ? 'num good' : r.runDays <= 30 ? 'num' : 'num orange';
-      periodDisp = `<span class="${periodCls}">${r.runDays}일</span>`;
-      if (r.startDate) periodDisp += `<br><span style="font-size:10px;color:var(--muted)">${r.startDate}</span>`;
+      const endTxt = r.endDate === '진행중' ? ' <span style="font-size:9px;color:var(--green-700);font-weight:600">▶진행중</span>' : '';
+      periodDisp = `<span class="${periodCls}">${r.runDays}일</span>${endTxt}`;
+      if (r.startDate) periodDisp += `<br><span style="font-size:10px;color:var(--muted)">${r.startDate}~</span>`;
     }
 
     const safeName = r.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
