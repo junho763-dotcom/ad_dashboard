@@ -267,6 +267,12 @@
   .imp-mid  { color: var(--muted); }
   .imp-good { color: var(--text); }
   .imp-high { color: var(--blue); font-weight: 600; }
+  .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  .status-dot.on      { background: var(--green-700); box-shadow: 0 0 0 2px var(--green-100); }
+  .status-dot.off     { background: #bbb; box-shadow: 0 0 0 2px #eee; }
+  .status-dot.unknown { background: #ddd; }
+  tbody tr.row-off { opacity: 0.55; }
+  tbody tr.row-off:hover { opacity: 1; }
 
   .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
 
@@ -380,6 +386,21 @@
     </div>
     <div class="sep"></div>
     <div class="filter-group">
+      <span class="filter-label">상태</span>
+      <button class="pill p-all" data-st="all" onclick="setStatus(this)">전체</button>
+      <button class="pill"       data-st="on"  onclick="setStatus(this)">ON 운영중</button>
+      <button class="pill"       data-st="off" onclick="setStatus(this)">OFF 중지됨</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">운영기간</span>
+      <button class="pill p-all" data-pd="all"    onclick="setPeriod(this)">전체</button>
+      <button class="pill"       data-pd="fresh"  onclick="setPeriod(this)">7일 이내</button>
+      <button class="pill"       data-pd="recent" onclick="setPeriod(this)">7~30일</button>
+      <button class="pill"       data-pd="old"    onclick="setPeriod(this)">30일 초과</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
       <span class="filter-label">상품</span>
       <select class="filter-select" id="product-filter" onchange="applyFilters()">
         <option value="">전체 상품</option>
@@ -398,15 +419,16 @@
     <table>
       <thead>
         <tr>
-          <th style="width:260px" onclick="sortBy('name')">광고명 <span class="sort-icon">↕</span></th>
-          <th style="width:110px" onclick="sortBy('product')">상품 <span class="sort-icon">↕</span></th>
-          <th style="width:80px"  onclick="sortBy('div')">사업부 <span class="sort-icon">↕</span></th>
-          <th style="width:72px"  onclick="sortBy('ctr')">CTR(%) <span class="sort-icon">↕</span></th>
-          <th style="width:90px"  onclick="sortBy('cpc')">CPC(원) <span class="sort-icon">↕</span></th>
-          <th style="width:72px"  onclick="sortBy('roas')">ROAS <span class="sort-icon">↕</span></th>
-          <th style="width:100px" onclick="sortBy('spend')">광고비(원) <span class="sort-icon">↕</span></th>
-          <th style="width:85px"  onclick="sortBy('imp')">노출 <span class="sort-icon">↕</span></th>
-          <th style="width:100px" onclick="sortBy('judgment')">판정 <span class="sort-icon">↕</span></th>
+          <th style="width:230px" onclick="sortBy('name')">광고명 <span class="sort-icon">↕</span></th>
+          <th style="width:90px"  onclick="sortBy('product')">상품 <span class="sort-icon">↕</span></th>
+          <th style="width:56px"  onclick="sortBy('adStatus')">상태 <span class="sort-icon">↕</span></th>
+          <th style="width:72px"  onclick="sortBy('runDays')">운영기간 <span class="sort-icon">↕</span></th>
+          <th style="width:60px"  onclick="sortBy('ctr')">CTR% <span class="sort-icon">↕</span></th>
+          <th style="width:82px"  onclick="sortBy('cpc')">CPC(원) <span class="sort-icon">↕</span></th>
+          <th style="width:60px"  onclick="sortBy('roas')">ROAS <span class="sort-icon">↕</span></th>
+          <th style="width:95px"  onclick="sortBy('spend')">광고비 <span class="sort-icon">↕</span></th>
+          <th style="width:82px"  onclick="sortBy('imp')">노출 <span class="sort-icon">↕</span></th>
+          <th style="width:95px"  onclick="sortBy('judgment')">판정 <span class="sort-icon">↕</span></th>
         </tr>
       </thead>
       <tbody id="table-body"></tbody>
@@ -431,6 +453,7 @@
 <script>
 let allRows = [];
 let ctrFilter = 'all', cpcFilter = 'all', judgeFilter = 'all', spendFilter = 'all', impFilter = 'all';
+let statusFilter = 'all', periodFilter = 'all';
 let sortKey = 'spend', sortDir = -1;
 
 /* ── 상품/사업부 분류 ── */
@@ -513,10 +536,12 @@ function parseFile(file) {
         if (kl.includes('지출 금액') || kl.includes('amount spent') || kl.includes('spend')) cm.spend = k;
         if (kl.includes('노출')     || kl.includes('impression'))    cm.imp   = k;
         if (kl.includes('클릭(전체)') || kl.includes('clicks'))      cm.click = k;
+        if (kl.includes('게재') || kl.includes('delivery') || kl === '상태' || kl === 'status') cm.status = k;
+        if (kl.includes('시작') || kl.includes('start date') || kl.includes('reporting starts')) cm.startDate = k;
+        if (kl.includes('종료') || kl.includes('end date')   || kl.includes('reporting ends'))   cm.endDate   = k;
       });
 
       allRows = raw
-        .filter(r => (parseFloat(r[cm.imp]) || 0) >= 100)
         .map(r => {
           const name  = String(r[cm.name]  || '');
           const adset = String(r[cm.adset] || '');
@@ -525,10 +550,32 @@ function parseFile(file) {
           const roas  = parseFloat(r[cm.roas])  || 0;
           const spend = parseFloat(r[cm.spend]) || 0;
           const imp   = parseFloat(r[cm.imp])   || 0;
+
+          /* 게재 상태 파싱 */
+          const rawStatus = String(r[cm.status] || '').toLowerCase();
+          let adStatus = 'unknown';
+          if (rawStatus.includes('활성') || rawStatus.includes('active') || rawStatus.includes('운영')) adStatus = 'on';
+          else if (rawStatus.includes('비활성') || rawStatus.includes('inactive') || rawStatus.includes('중지') ||
+                   rawStatus.includes('paused') || rawStatus.includes('off') || rawStatus.includes('종료')) adStatus = 'off';
+
+          /* 날짜/운영기간 파싱 */
+          let startDate = '', endDate = '', runDays = null;
+          if (cm.startDate && r[cm.startDate]) {
+            const sd = new Date(r[cm.startDate]);
+            const ed = cm.endDate && r[cm.endDate] ? new Date(r[cm.endDate]) : new Date();
+            if (!isNaN(sd.getTime())) {
+              startDate = sd.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
+              endDate   = !isNaN(ed.getTime()) ? ed.toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' }) : '';
+              runDays   = Math.max(1, Math.round((ed - sd) / (1000 * 60 * 60 * 24)));
+            }
+          }
+
           const { div, product } = classify(name, adset);
-          const tier    = spendTier(spend);
+          const tier_    = spendTier(spend);
           const impTier_ = impTier(imp);
-          return { name, adset, ctr, cpc, roas, spend, imp, div, product, tier, impTier: impTier_,
+          return { name, adset, ctr, cpc, roas, spend, imp, div, product,
+                   tier: tier_, impTier: impTier_,
+                   adStatus, startDate, endDate, runDays,
                    judgment: judge(ctr, cpc, roas, spend, imp) };
         });
 
@@ -578,6 +625,20 @@ function setImp(btn) {
   btn.className = 'pill ' + cls;
   applyFilters();
 }
+function setStatus(btn) {
+  document.querySelectorAll('[data-st]').forEach(b => b.className = 'pill');
+  statusFilter = btn.dataset.st;
+  const cls = { all:'p-all', on:'p-good', off:'p-danger' }[statusFilter] || 'p-all';
+  btn.className = 'pill ' + cls;
+  applyFilters();
+}
+function setPeriod(btn) {
+  document.querySelectorAll('[data-pd]').forEach(b => b.className = 'pill');
+  periodFilter = btn.dataset.pd;
+  const cls = { all:'p-all', fresh:'p-good', recent:'p-warn', old:'p-orange' }[periodFilter] || 'p-all';
+  btn.className = 'pill ' + cls;
+  applyFilters();
+}
 function setJudge(btn) {
   document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
   judgeFilter = btn.dataset.j;
@@ -590,7 +651,7 @@ function setJudge(btn) {
 function sortBy(key) {
   document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
   const ths = document.querySelectorAll('thead th');
-  const keys = ['name','product','div','ctr','cpc','roas','spend','imp','judgment'];
+  const keys = ['name','product','adStatus','runDays','ctr','cpc','roas','spend','imp','judgment'];
   const idx  = keys.indexOf(key);
   if (idx >= 0) ths[idx].classList.add('sorted');
   if (sortKey === key) sortDir *= -1;
@@ -613,6 +674,13 @@ function applyFilters() {
   if (spendFilter !== 'all') rows = rows.filter(r => r.tier === spendFilter);
 
   if (impFilter !== 'all') rows = rows.filter(r => r.impTier === impFilter);
+
+  if (statusFilter === 'on')  rows = rows.filter(r => r.adStatus === 'on');
+  else if (statusFilter === 'off') rows = rows.filter(r => r.adStatus === 'off');
+
+  if (periodFilter === 'fresh')  rows = rows.filter(r => r.runDays !== null && r.runDays <= 7);
+  else if (periodFilter === 'recent') rows = rows.filter(r => r.runDays !== null && r.runDays > 7 && r.runDays <= 30);
+  else if (periodFilter === 'old')    rows = rows.filter(r => r.runDays !== null && r.runDays > 30);
 
   if (judgeFilter === 'off')         rows = rows.filter(r => r.judgment === 'off');
   else if (judgeFilter === 'urgent')    rows = rows.filter(r => ['off','urgent'].includes(r.judgment));
@@ -642,6 +710,8 @@ function renderKPI(rows) {
   const lowImpCnt   = rows.filter(r => r.judgment === 'low_imp').length;
   const recCnt      = rows.filter(r => r.judgment === 'rec').length;
   const totalImp    = rows.reduce((s,r) => s + r.imp, 0);
+  const statusOnCnt  = rows.filter(r => r.adStatus === 'on').length;
+  const statusOffCnt = rows.filter(r => r.adStatus === 'off').length;
   const totalSpend = rows.reduce((s,r) => s + r.spend, 0);
   const totalClicks = rows.reduce((s,r) => s + (r.cpc > 0 ? r.spend / r.cpc : 0), 0);
   const avgCTR = rows.length ? rows.reduce((s,r) => s + r.ctr, 0) / rows.length : 0;
@@ -654,6 +724,11 @@ function renderKPI(rows) {
       <div class="kpi-label">필터 소재 수</div>
       <div class="kpi-val">${rows.length}</div>
       <div class="kpi-sub">전체 ${allRows.length}개 중</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">운영중 / 중지</div>
+      <div class="kpi-val"><span style="color:var(--green-700)">${statusOnCnt}</span> / <span style="color:var(--muted);font-size:18px">${statusOffCnt}</span></div>
+      <div class="kpi-sub">ON / OFF 소재</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">즉시 OFF</div>
@@ -748,16 +823,33 @@ function renderTable(rows) {
     const jm       = JM[r.judgment] || JM.na;
     const tier     = TIER_LABEL[r.tier] || TIER_LABEL.normal;
     const impTierL = IMP_TIER_LABEL[r.impTier] || IMP_TIER_LABEL.mid;
-    const short    = r.name.length > 38 ? r.name.slice(0,36) + '…' : r.name;
+    const short    = r.name.length > 34 ? r.name.slice(0,32) + '…' : r.name;
     const tagCls   = r.div === 'Medical' ? 'tag tag-med' : 'tag tag-hc';
     const spendDisp = Math.round(r.spend).toLocaleString();
     const spendCls  = r.tier === 'high' ? 'num spend-high' : 'num';
     const impDisp   = Math.round(r.imp).toLocaleString();
     const impCls    = r.impTier === 'high' ? 'num imp-high' : r.impTier === 'low' ? 'num imp-low' : 'num';
-    return `<tr>
-      <td><span class="ad-name" title="${r.name}">${short}</span><span class="ad-adset">${r.adset.length > 36 ? r.adset.slice(0,34)+'…' : r.adset}</span></td>
+
+    /* 게재 상태 뱃지 */
+    const statusBadge = r.adStatus === 'on'
+      ? `<span class="status-dot on" title="운영중"></span>`
+      : r.adStatus === 'off'
+      ? `<span class="status-dot off" title="중지됨"></span>`
+      : `<span class="status-dot unknown" title="상태 미확인"></span>`;
+
+    /* 운영기간 표시 */
+    let periodDisp = '-';
+    if (r.runDays !== null) {
+      const periodCls = r.runDays <= 7 ? 'num good' : r.runDays <= 30 ? 'num' : 'num orange';
+      periodDisp = `<span class="${periodCls}">${r.runDays}일</span>`;
+      if (r.startDate) periodDisp += `<br><span style="font-size:10px;color:var(--muted)">${r.startDate}</span>`;
+    }
+
+    return `<tr class="${r.adStatus === 'off' ? 'row-off' : ''}">
+      <td><span class="ad-name" title="${r.name}">${short}</span><span class="ad-adset ${tagCls}" style="background:none;padding:0;border-radius:0;font-size:10px;color:var(--muted)">${r.product} · ${r.div}</span></td>
       <td style="font-size:11px">${r.product}</td>
-      <td><span class="${tagCls}">${r.div}</span></td>
+      <td style="text-align:center">${statusBadge}</td>
+      <td>${periodDisp}</td>
       <td class="${ctrCls}">${r.ctr.toFixed(2)}</td>
       <td class="${cpcCls}">${Math.round(r.cpc).toLocaleString()}</td>
       <td class="${roasCls}">${r.roas > 0 ? r.roas.toFixed(1)+'x' : '-'}</td>
