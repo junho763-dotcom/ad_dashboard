@@ -226,6 +226,7 @@
     cursor: pointer;
     position: sticky;
     top: 52px;
+    z-index: 10;
   }
   thead th:hover { background: #e8ede9; color: var(--text); }
   thead th .sort-icon { margin-left: 4px; opacity: .4; }
@@ -317,12 +318,13 @@
   .imp-mid  { color: var(--muted); }
   .imp-good { color: var(--text); }
   .imp-high { color: var(--blue); font-weight: 600; }
-  .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-  .status-dot.on      { background: var(--green-700); box-shadow: 0 0 0 2px var(--green-100); }
-  .status-dot.off     { background: #bbb; box-shadow: 0 0 0 2px #eee; }
-  .status-dot.unknown { background: #ddd; }
-  tbody tr.row-off { opacity: 0.55; }
-  tbody tr.row-off:hover { opacity: 1; }
+  .status-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: middle; }
+  .status-dot.on      { background: #1db954; box-shadow: 0 0 0 2.5px #c8f5dd; }
+  .status-dot.off     { background: #e53935; box-shadow: 0 0 0 2.5px #ffd0d0; }
+  .status-dot.unknown { background: #ccc;    box-shadow: 0 0 0 2.5px #eee; }
+  tbody tr.row-off td:not(:first-child) { opacity: 0.5; }
+  tbody tr.row-off td:first-child { opacity: 1; }
+  tbody tr.row-off:hover td { opacity: 1; }
 
   .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
 
@@ -584,33 +586,35 @@ function parseFile(file) {
       const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
       if (!raw.length) { alert('데이터가 없습니다.'); return; }
 
-      /* 컬럼 매핑 - 우선순위 명확히 */
+      /* 컬럼 매핑 - 공백·숨김문자 제거 후 비교 */
       const cm = {};
       const keys = Object.keys(raw[0]);
+      // 컬럼명 정규화: 공백·줄바꿈·제어문자 제거
+      const norm = s => String(s).replace(/\s+/g,' ').trim().toLowerCase();
+
       keys.forEach(k => {
-        const kl = k.toLowerCase().trim();
-        if (!cm.name   && (kl === '광고 이름' || kl === 'ad name' || kl.includes('광고 이름'))) cm.name   = k;
-        if (!cm.adset  && (kl === '광고 세트 이름' || kl.includes('광고 세트') || kl.includes('adset') || kl.includes('ad set'))) cm.adset  = k;
-        if (!cm.ctr    && (kl === 'ctr(전체)' || kl.startsWith('ctr'))) cm.ctr   = k;
-        if (!cm.cpc    && (kl.includes('cpc'))) cm.cpc   = k;
+        const kl = norm(k);
+        if (!cm.name   && (kl === '광고 이름' || kl === 'ad name')) cm.name   = k;
+        if (!cm.adset  && (kl === '광고 세트 이름' || kl.includes('광고 세트') || kl.includes('ad set'))) cm.adset  = k;
+        if (!cm.ctr    && kl.includes('ctr')) cm.ctr   = k;
+        if (!cm.cpc    && kl.includes('cpc')) cm.cpc   = k;
         if (!cm.roas   && (kl.includes('구매 roas') || kl.includes('purchase roas'))) cm.roas  = k;
         if (!cm.roas   && kl.includes('roas')) cm.roas  = k;
-        if (!cm.spend  && (kl.includes('지출 금액') || kl.includes('amount spent') || kl === 'spend')) cm.spend = k;
-        if (!cm.imp    && (kl === '노출' || kl.includes('impression'))) cm.imp   = k;
+        if (!cm.spend  && (kl.includes('지출 금액') || kl.includes('amount spent'))) cm.spend = k;
+        if (!cm.imp    && (kl === '노출' || kl === 'impressions' || kl === 'impression')) cm.imp = k;
         if (!cm.click  && (kl.includes('클릭') || kl.includes('click'))) cm.click = k;
-        // 게재 상태: 정확히 '광고 게재' 우선
-        if (!cm.status && kl === '광고 게재') cm.status = k;
-        if (!cm.status && (kl === '게재' || kl === '게재 상태' || kl === 'status' || kl === 'delivery')) cm.status = k;
-        // 날짜: '시작'/'종료' 단독 컬럼 최우선
-        if (kl === '시작' || kl === 'start date') cm.startDate = k;
-        if (kl === '종료' || kl === 'end date')   cm.endDate   = k;
+        // 게재 상태 - '광고 게재' 포함이면 무조건 잡기
+        if (!cm.status && kl.includes('게재')) cm.status = k;
+        if (!cm.status && (kl === 'delivery' || kl === 'status' || kl.includes('delivery status'))) cm.status = k;
+        // 날짜
+        if (!cm.startDate && (kl === '시작' || kl === 'start date' || kl === 'reporting starts' || kl.includes('보고 시작'))) cm.startDate = k;
+        if (!cm.endDate   && (kl === '종료' || kl === 'end date'   || kl === 'reporting ends'   || kl.includes('보고 종료')))   cm.endDate   = k;
       });
-      // 단독 '시작'/'종료' 없으면 '보고 시작'/'보고 종료' 폴백
-      keys.forEach(k => {
-        const kl = k.toLowerCase().trim();
-        if (!cm.startDate && (kl.includes('보고 시작') || kl.includes('reporting starts'))) cm.startDate = k;
-        if (!cm.endDate   && (kl.includes('보고 종료') || kl.includes('reporting ends')))   cm.endDate   = k;
-      });
+
+      // 매핑 결과 + 샘플값 콘솔 출력
+      console.log('컬럼 매핑:', JSON.stringify(cm));
+      if (cm.status) console.log('상태 컬럼 샘플:', [raw[0][cm.status], raw[1]?.[cm.status], raw[2]?.[cm.status]]);
+      else console.warn('⚠️ 게재 상태 컬럼을 찾지 못했습니다. 전체 컬럼:', keys);
 
       allRows = raw
         .map(r => {
@@ -623,15 +627,16 @@ function parseFile(file) {
           const imp   = parseFloat(r[cm.imp])   || 0;
 
           /* 게재 상태 파싱 */
-          const rawStatus = String(r[cm.status] || '').toLowerCase().trim();
+          const rawStatusVal = cm.status ? r[cm.status] : '';
+          const rawStatus = String(rawStatusVal === null || rawStatusVal === undefined ? '' : rawStatusVal).toLowerCase().replace(/\s+/g,' ').trim();
           let adStatus = 'unknown';
-          if (rawStatus === 'active' || rawStatus.includes('활성') || rawStatus.includes('운영')) {
+          if (rawStatus === 'active' || rawStatus.includes('활성') || rawStatus.includes('운영중')) {
             adStatus = 'on';
           } else if (
             rawStatus === 'inactive' || rawStatus === 'not_delivering' ||
             rawStatus === 'archived' || rawStatus === 'deleted' || rawStatus === 'paused' ||
-            rawStatus.includes('비활성') || rawStatus.includes('중지') ||
-            rawStatus.includes('off') || rawStatus.includes('종료') || rawStatus.includes('보관')
+            rawStatus.includes('비활성') || rawStatus.includes('중지') || rawStatus.includes('보관') ||
+            rawStatus.includes('종료') || (rawStatus.includes('off') && !rawStatus.includes('offset'))
           ) {
             adStatus = 'off';
           }
@@ -683,11 +688,16 @@ function parseFile(file) {
       document.getElementById('dashboard').style.display     = 'block';
 
       // 디버그: 컬럼 매핑 및 상태 분포 확인
-      console.log('=== 컬럼 매핑 결과 ===', cm);
+      console.log('=== 컬럼 매핑 ===', JSON.stringify(cm));
+      if (cm.status) {
+        const statusSamples = allRows.slice(0,5).map(r => ({name: r.name.slice(0,20), adStatus: r.adStatus}));
+        console.log('=== 상태 샘플 (첫 5개) ===', statusSamples);
+      } else {
+        console.warn('⚠️ 게재 상태 컬럼 못 찾음. 전체 컬럼:', keys);
+      }
       const statusDist = {};
       allRows.forEach(r => { statusDist[r.adStatus] = (statusDist[r.adStatus]||0)+1; });
-      console.log('=== 게재 상태 분포 ===', statusDist);
-      console.log('전체 소재 수:', allRows.length);
+      console.log('=== 상태 분포 ===', statusDist);
 
       applyFilters();
     } catch (err) {
@@ -736,6 +746,12 @@ function setStatus(btn) {
   statusFilter = btn.dataset.st;
   const cls = { all:'p-all', on:'p-good', off:'p-danger' }[statusFilter] || 'p-all';
   btn.className = 'pill ' + cls;
+  // 상태 필터 변경 시 판정 필터 초기화
+  if (statusFilter !== 'all') {
+    judgeFilter = 'all';
+    document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
+    document.querySelector('[data-j="all"]').className = 'pill p-all';
+  }
   applyFilters();
 }
 function setPeriod(btn) {
@@ -947,9 +963,9 @@ function renderTable(rows) {
 
     /* 게재 상태 뱃지 */
     const statusBadge = r.adStatus === 'on'
-      ? `<span class="status-dot on" title="운영중"></span>`
+      ? `<span class="status-dot on" title="ON · 운영중"></span>`
       : r.adStatus === 'off'
-      ? `<span class="status-dot off" title="중지됨"></span>`
+      ? `<span class="status-dot off" title="OFF · 중지됨"></span>`
       : `<span class="status-dot unknown" title="상태 미확인"></span>`;
 
     /* 운영기간 표시 */
@@ -973,7 +989,7 @@ function renderTable(rows) {
         <span class="ad-adset">${r.product} · ${r.div}</span>
       </td>
       <td style="font-size:11px">${r.product}</td>
-      <td style="text-align:center">${statusBadge}</td>
+      <td style="text-align:center;overflow:hidden">${statusBadge}</td>
       <td>${periodDisp}</td>
       <td class="${ctrCls}">${r.ctr.toFixed(2)}</td>
       <td class="${cpcCls}">${Math.round(r.cpc).toLocaleString()}</td>
