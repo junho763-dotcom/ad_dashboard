@@ -263,6 +263,10 @@
   .spend-test   { color: var(--muted); }
   .spend-normal { color: var(--text); }
   .spend-high   { color: #880e4f; font-weight: 700; }
+  .imp-low  { color: #bbb; font-style: italic; }
+  .imp-mid  { color: var(--muted); }
+  .imp-good { color: var(--text); }
+  .imp-high { color: var(--blue); font-weight: 600; }
 
   .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
 
@@ -357,12 +361,22 @@
     </div>
     <div class="sep"></div>
     <div class="filter-group">
+      <span class="filter-label">노출</span>
+      <button class="pill p-all" data-imp="all"   onclick="setImp(this)">전체</button>
+      <button class="pill"       data-imp="low"   onclick="setImp(this)">소량 &lt;1천</button>
+      <button class="pill"       data-imp="mid"   onclick="setImp(this)">보통 1천~1만</button>
+      <button class="pill"       data-imp="good"  onclick="setImp(this)">충분 1만~5만</button>
+      <button class="pill"       data-imp="high"  onclick="setImp(this)">고노출 5만+</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
       <span class="filter-label">판정</span>
-      <button class="pill p-all" data-j="all"    onclick="setJudge(this)">전체</button>
-      <button class="pill"       data-j="off"    onclick="setJudge(this)">즉시 OFF</button>
-      <button class="pill"       data-j="urgent" onclick="setJudge(this)">긴급 검토</button>
+      <button class="pill p-all" data-j="all"      onclick="setJudge(this)">전체</button>
+      <button class="pill"       data-j="off"      onclick="setJudge(this)">즉시 OFF</button>
+      <button class="pill"       data-j="urgent"   onclick="setJudge(this)">긴급 검토</button>
       <button class="pill"       data-j="high_burn" onclick="setJudge(this)">고소진 경고</button>
-      <button class="pill"       data-j="rec"    onclick="setJudge(this)">스케일업 추천</button>
+      <button class="pill"       data-j="low_imp"  onclick="setJudge(this)">노출 부족</button>
+      <button class="pill"       data-j="rec"      onclick="setJudge(this)">스케일업 추천</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
@@ -409,13 +423,14 @@
     <div class="guide-item"><div class="guide-dot" style="background:var(--green-700)"></div><div><strong>정상 운영</strong> — CTR ≥ 2% + CPC ≤ 1,500원</div></div>
     <div class="guide-item"><div class="guide-dot" style="background:var(--blue)"></div><div><strong>스케일업 추천</strong> — CTR ≥ 3% + CPC ≤ 1,000원 + ROAS ≥ 5x</div></div>
     <div class="guide-item"><div class="guide-dot" style="background:#aaa"></div><div><strong>광고비 구간</strong> — &lt;1만: 데이터 미달 · 1~5만: 테스트 중 · 5~20만: 정상 운영 · 20만↑: 고소진 (우선 점검)</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:var(--blue)"></div><div><strong>노출 구간</strong> — &lt;1천: 소량(CTR 신뢰 낮음, OFF 보류) · 1천~1만: 보통 · 1만~5만: 충분 · 5만↑: 고노출 (성과 없으면 즉시 점검)</div></div>
   </div>
 
 </div>
 
 <script>
 let allRows = [];
-let ctrFilter = 'all', cpcFilter = 'all', judgeFilter = 'all', spendFilter = 'all';
+let ctrFilter = 'all', cpcFilter = 'all', judgeFilter = 'all', spendFilter = 'all', impFilter = 'all';
 let sortKey = 'spend', sortDir = -1;
 
 /* ── 상품/사업부 분류 ── */
@@ -451,9 +466,19 @@ function spendTier(spend) {
   return 'high';
 }
 
+/* ── 노출 구간 분류 ── */
+function impTier(imp) {
+  if (imp < 1000)  return 'low';
+  if (imp < 10000) return 'mid';
+  if (imp < 50000) return 'good';
+  return 'high';
+}
+
 /* ── ON/OFF 판정 ── */
-function judge(ctr, cpc, roas, spend) {
+function judge(ctr, cpc, roas, spend, imp) {
   if (spend < 5000) return 'na';
+  // 노출 1,000 미만은 CTR/CPC 신뢰 낮음 → 즉시 OFF 보류, 노출부족 경고
+  if (imp < 1000 && (ctr < 1.0 || cpc > 3000)) return 'low_imp';
   if ((ctr < 1.0 && cpc > 3000) || ctr < 0.5 || cpc > 5000) return 'off';
   if (ctr < 1.0 || cpc > 3000) return 'urgent';
   if (spend >= 200000 && roas > 0 && roas < 3.0) return 'high_burn';
@@ -501,9 +526,10 @@ function parseFile(file) {
           const spend = parseFloat(r[cm.spend]) || 0;
           const imp   = parseFloat(r[cm.imp])   || 0;
           const { div, product } = classify(name, adset);
-          const tier = spendTier(spend);
-          return { name, adset, ctr, cpc, roas, spend, imp, div, product, tier,
-                   judgment: judge(ctr, cpc, roas, spend) };
+          const tier    = spendTier(spend);
+          const impTier_ = impTier(imp);
+          return { name, adset, ctr, cpc, roas, spend, imp, div, product, tier, impTier: impTier_,
+                   judgment: judge(ctr, cpc, roas, spend, imp) };
         });
 
       document.getElementById('nav-file-name').textContent = file.name;
@@ -545,10 +571,17 @@ function setSpend(btn) {
   btn.className = 'pill ' + cls;
   applyFilters();
 }
+function setImp(btn) {
+  document.querySelectorAll('[data-imp]').forEach(b => b.className = 'pill');
+  impFilter = btn.dataset.imp;
+  const cls = { all:'p-all', low:'p-warn', mid:'p-warn', good:'p-good', high:'p-blue' }[impFilter] || 'p-all';
+  btn.className = 'pill ' + cls;
+  applyFilters();
+}
 function setJudge(btn) {
   document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
   judgeFilter = btn.dataset.j;
-  const cls = { all:'p-all', off:'p-danger', urgent:'p-orange', high_burn:'p-high', rec:'p-blue' }[judgeFilter] || 'p-all';
+  const cls = { all:'p-all', off:'p-danger', urgent:'p-orange', high_burn:'p-high', low_imp:'p-warn', rec:'p-blue' }[judgeFilter] || 'p-all';
   btn.className = 'pill ' + cls;
   applyFilters();
 }
@@ -579,10 +612,13 @@ function applyFilters() {
 
   if (spendFilter !== 'all') rows = rows.filter(r => r.tier === spendFilter);
 
-  if (judgeFilter === 'off')       rows = rows.filter(r => r.judgment === 'off');
-  else if (judgeFilter === 'urgent')   rows = rows.filter(r => ['off','urgent'].includes(r.judgment));
+  if (impFilter !== 'all') rows = rows.filter(r => r.impTier === impFilter);
+
+  if (judgeFilter === 'off')         rows = rows.filter(r => r.judgment === 'off');
+  else if (judgeFilter === 'urgent')    rows = rows.filter(r => ['off','urgent'].includes(r.judgment));
   else if (judgeFilter === 'high_burn') rows = rows.filter(r => r.judgment === 'high_burn');
-  else if (judgeFilter === 'rec')      rows = rows.filter(r => r.judgment === 'rec');
+  else if (judgeFilter === 'low_imp')   rows = rows.filter(r => r.judgment === 'low_imp');
+  else if (judgeFilter === 'rec')       rows = rows.filter(r => r.judgment === 'rec');
 
   if (prodF) rows = rows.filter(r => r.product === prodF);
   if (divF)  rows = rows.filter(r => r.div     === divF);
@@ -603,7 +639,9 @@ function renderKPI(rows) {
   const offCnt      = rows.filter(r => r.judgment === 'off').length;
   const urgentCnt   = rows.filter(r => r.judgment === 'urgent').length;
   const highBurnCnt = rows.filter(r => r.judgment === 'high_burn').length;
+  const lowImpCnt   = rows.filter(r => r.judgment === 'low_imp').length;
   const recCnt      = rows.filter(r => r.judgment === 'rec').length;
+  const totalImp    = rows.reduce((s,r) => s + r.imp, 0);
   const totalSpend = rows.reduce((s,r) => s + r.spend, 0);
   const totalClicks = rows.reduce((s,r) => s + (r.cpc > 0 ? r.spend / r.cpc : 0), 0);
   const avgCTR = rows.length ? rows.reduce((s,r) => s + r.ctr, 0) / rows.length : 0;
@@ -633,6 +671,11 @@ function renderKPI(rows) {
       <div class="kpi-sub">20만↑ + ROAS &lt; 3x</div>
     </div>
     <div class="kpi-card">
+      <div class="kpi-label">노출 부족</div>
+      <div class="kpi-val" style="color:var(--muted)">${lowImpCnt}</div>
+      <div class="kpi-sub">1천 미만 · OFF 보류</div>
+    </div>
+    <div class="kpi-card">
       <div class="kpi-label">스케일업 추천</div>
       <div class="kpi-val blue">${recCnt}</div>
       <div class="kpi-sub">예산 증액 후보</div>
@@ -653,6 +696,11 @@ function renderKPI(rows) {
       <div class="kpi-sub">${(totalSpend / 100000000).toFixed(2)}억원</div>
     </div>
     <div class="kpi-card">
+      <div class="kpi-label">총 노출</div>
+      <div class="kpi-val">${totalImp >= 1000000 ? (totalImp/10000).toFixed(0)+'만' : totalImp.toLocaleString()}</div>
+      <div class="kpi-sub">필터 소재 합산</div>
+    </div>
+    <div class="kpi-card">
       <div class="kpi-label">평균 픽셀 ROAS</div>
       <div class="kpi-val ${avgROAS < 3 ? 'warn' : 'good'}">${avgROAS.toFixed(1)}x</div>
       <div class="kpi-sub">기준: ≥ 3.0x</div>
@@ -665,6 +713,7 @@ const JM = {
   off:       { label: '즉시 OFF',    cls: 'b-off' },
   urgent:    { label: '긴급 검토',   cls: 'b-urgent' },
   high_burn: { label: '고소진 경고', cls: 'b-high' },
+  low_imp:   { label: '노출 부족',   cls: 'b-na' },
   roas:      { label: 'ROAS 경고',  cls: 'b-roas' },
   warn:      { label: '주의 관찰',   cls: 'b-warn' },
   ok:        { label: '정상 운영',   cls: 'b-ok' },
@@ -679,6 +728,13 @@ const TIER_LABEL = {
   high:   { txt: '고소진', cls: 'spend-high' },
 };
 
+const IMP_TIER_LABEL = {
+  low:  { txt: '소량',   cls: 'imp-low' },
+  mid:  { txt: '보통',   cls: 'imp-mid' },
+  good: { txt: '충분',   cls: 'imp-good' },
+  high: { txt: '고노출', cls: 'imp-high' },
+};
+
 function renderTable(rows) {
   const tbody = document.getElementById('table-body');
   if (!rows.length) {
@@ -689,12 +745,15 @@ function renderTable(rows) {
     const ctrCls  = r.ctr  < 1    ? 'num red' : r.ctr  < 2    ? 'num orange' : 'num good';
     const cpcCls  = r.cpc  > 3000 ? 'num red' : r.cpc  > 1500 ? 'num orange' : 'num good';
     const roasCls = r.roas >= 5   ? 'num good': r.roas >= 3   ? 'num blue'   : r.roas > 0 ? 'num red' : 'num muted';
-    const jm      = JM[r.judgment] || JM.na;
-    const tier    = TIER_LABEL[r.tier] || TIER_LABEL.normal;
-    const short   = r.name.length > 38 ? r.name.slice(0,36) + '…' : r.name;
-    const tagCls  = r.div === 'Medical' ? 'tag tag-med' : 'tag tag-hc';
+    const jm       = JM[r.judgment] || JM.na;
+    const tier     = TIER_LABEL[r.tier] || TIER_LABEL.normal;
+    const impTierL = IMP_TIER_LABEL[r.impTier] || IMP_TIER_LABEL.mid;
+    const short    = r.name.length > 38 ? r.name.slice(0,36) + '…' : r.name;
+    const tagCls   = r.div === 'Medical' ? 'tag tag-med' : 'tag tag-hc';
     const spendDisp = Math.round(r.spend).toLocaleString();
     const spendCls  = r.tier === 'high' ? 'num spend-high' : 'num';
+    const impDisp   = Math.round(r.imp).toLocaleString();
+    const impCls    = r.impTier === 'high' ? 'num imp-high' : r.impTier === 'low' ? 'num imp-low' : 'num';
     return `<tr>
       <td><span class="ad-name" title="${r.name}">${short}</span><span class="ad-adset">${r.adset.length > 36 ? r.adset.slice(0,34)+'…' : r.adset}</span></td>
       <td style="font-size:11px">${r.product}</td>
@@ -702,8 +761,8 @@ function renderTable(rows) {
       <td class="${ctrCls}">${r.ctr.toFixed(2)}</td>
       <td class="${cpcCls}">${Math.round(r.cpc).toLocaleString()}</td>
       <td class="${roasCls}">${r.roas > 0 ? r.roas.toFixed(1)+'x' : '-'}</td>
-      <td class="${spendCls}" title="${tier.txt}">${spendDisp} <span class="${tier.cls}" style="font-size:10px">(${tier.txt})</span></td>
-      <td class="num muted">${Math.round(r.imp).toLocaleString()}</td>
+      <td class="${spendCls}">${spendDisp} <span class="${tier.cls}" style="font-size:10px">(${tier.txt})</span></td>
+      <td class="${impCls}">${impDisp} <span class="${impTierL.cls}" style="font-size:10px">(${impTierL.txt})</span></td>
       <td><span class="badge ${jm.cls}">${jm.label}</span></td>
     </tr>`;
   }).join('');
