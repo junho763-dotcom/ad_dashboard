@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바인허브 메타광고 분석 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --green-900: #0a3d2b;
+    --green-700: #0f6b4a;
+    --green-500: #1a9e6e;
+    --green-100: #e8f5ee;
+    --green-50:  #f2faf6;
+    --navy:      #16213e;
+    --navy-mid:  #1e2d4a;
+    --ink:       #1a1a2e;
+    --red:       #c62828;
+    --red-bg:    #fff0f0;
+    --orange:    #bf360c;
+    --orange-bg: #fff5ee;
+    --amber:     #b8860b;
+    --amber-bg:  #fffde7;
+    --blue:      #1565c0;
+    --blue-bg:   #e8f0fe;
+    --border:    #e0e8e4;
+    --bg:        #f6f8f7;
+    --surface:   #ffffff;
+    --muted:     #6b7a74;
+    --text:      #1a1a2e;
+    --font-data: 'DM Mono', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── TOP NAV ── */
+  .nav {
+    background: var(--navy);
+    padding: 0 2rem;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nav-logo {
+    width: 28px; height: 28px;
+    background: var(--green-700);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff;
+  }
+  .nav-title { color: #fff; font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .nav-sub   { color: rgba(255,255,255,.45); font-size: 12px; margin-top: 1px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-file  { font-size: 11px; color: rgba(255,255,255,.5); }
+  .nav-upload-btn {
+    background: var(--green-700);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .nav-upload-btn:hover { background: var(--green-500); }
+  .nav-upload-btn input {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  /* ── UPLOAD SCREEN ── */
+  .upload-screen {
+    min-height: calc(100vh - 52px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 2rem;
+  }
+  .upload-card {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 3rem 2.5rem;
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+  }
+  .upload-icon {
+    width: 64px; height: 64px;
+    background: var(--green-100);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 28px;
+  }
+  .upload-card h2 { font-size: 20px; font-weight: 700; margin-bottom: .5rem; }
+  .upload-card p  { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 1.75rem; }
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem 1.5rem;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+  }
+  .drop-zone:hover { border-color: var(--green-700); background: var(--green-50); }
+  .drop-zone.drag-over { border-color: var(--green-700); background: var(--green-50); }
+  .drop-zone input  { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-zone-label  { font-size: 13px; color: var(--muted); }
+  .drop-zone-label strong { color: var(--green-700); }
+  .upload-hint { font-size: 11px; color: #aaa; margin-top: .5rem; }
+
+  /* ── DASHBOARD ── */
+  .dashboard { display: none; padding: 1.5rem 2rem 3rem; max-width: 1600px; margin: 0 auto; }
+
+  /* KPI STRIP */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .875rem 1rem;
+  }
+  .kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; }
+  .kpi-val   { font-size: 22px; font-weight: 700; font-family: var(--font-data); }
+  .kpi-val.danger { color: var(--red); }
+  .kpi-val.warn   { color: var(--orange); }
+  .kpi-val.good   { color: var(--green-700); }
+  .kpi-val.blue   { color: var(--blue); }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* FILTER BAR */
+  .filter-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .875rem 1.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .filter-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+  .pill {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text);
+    transition: all .12s;
+    white-space: nowrap;
+  }
+  .pill:hover { border-color: #aaa; background: var(--bg); }
+  .pill.p-all    { background: var(--ink);     color: #fff; border-color: var(--ink); }
+  .pill.p-warn   { background: var(--amber-bg); color: var(--amber); border-color: var(--amber); }
+  .pill.p-danger { background: var(--red-bg);   color: var(--red);   border-color: var(--red); }
+  .pill.p-orange { background: var(--orange-bg);color: var(--orange);border-color: var(--orange); }
+  .pill.p-good   { background: var(--green-100);color: var(--green-700); border-color: var(--green-700); }
+  .pill.p-blue   { background: var(--blue-bg);  color: var(--blue);  border-color: var(--blue); }
+  .pill.p-purple { background: #f3e5f5; color: #6a1b9a; border-color: #6a1b9a; }
+  .pill.p-high   { background: #fce4ec; color: #880e4f; border-color: #880e4f; }
+
+  select.filter-select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+  }
+  select.filter-select:focus { border-color: var(--green-700); }
+
+  .filter-right { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  /* MAIN TABLE */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead th {
+    background: #f0f4f2;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    user-select: none;
+    cursor: pointer;
+    position: sticky;
+    top: 52px;
+  }
+  thead th:hover { background: #e8ede9; color: var(--text); }
+  thead th .sort-icon { margin-left: 4px; opacity: .4; }
+  thead th.sorted .sort-icon { opacity: 1; color: var(--green-700); }
+  tbody tr { border-bottom: 1px solid #f0f4f2; transition: background .08s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--green-50); }
+  tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
+
+  .ad-name { font-size: 11px; color: var(--text); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .ad-adset { font-size: 10px; color: var(--muted); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; }
+  .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  .tag-med  { background: #e8edf5; color: #16213e; }
+  .tag-hc   { background: var(--green-100); color: var(--green-700); }
+  .num { font-family: var(--font-data); font-size: 12px; }
+  .num.red    { color: var(--red); font-weight: 700; }
+  .num.orange { color: var(--orange); }
+  .num.good   { color: var(--green-700); }
+  .num.blue   { color: var(--blue); }
+  .num.muted  { color: var(--muted); }
+  .badge {
+    display: inline-block; padding: 3px 9px;
+    border-radius: 20px; font-size: 10px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .b-off    { background: var(--red-bg);    color: var(--red);        border: 1px solid #f5c6c6; }
+  .b-urgent { background: var(--orange-bg); color: var(--orange);     border: 1px solid #f5cdb8; }
+  .b-roas   { background: #fff8e1;          color: var(--amber);      border: 1px solid #f5e099; }
+  .b-warn   { background: var(--amber-bg);  color: var(--amber);      border: 1px solid #f5e099; }
+  .b-ok     { background: var(--green-100); color: var(--green-700);  border: 1px solid #a8d9be; }
+  .b-rec    { background: var(--blue-bg);   color: var(--blue);       border: 1px solid #9fbee8; }
+  .b-na     { background: #f0f0f0;          color: #999;              border: 1px solid #ddd; }
+  .b-high   { background: #fce4ec;          color: #880e4f;           border: 1px solid #f8bbd9; }
+  .spend-na     { color: #bbb; font-style: italic; }
+  .spend-test   { color: var(--muted); }
+  .spend-normal { color: var(--text); }
+  .spend-high   { color: #880e4f; font-weight: 700; }
+
+  .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
+
+  /* GUIDE */
+  .guide {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 8px;
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .guide-item { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .guide-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .guide-item strong { color: var(--text); }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .nav { padding: 0 1rem; }
+    .dashboard { padding: 1rem 1rem 3rem; }
+    .filter-bar { gap: 8px; }
+    .sep { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">V</div>
+    <div>
+      <div class="nav-title">바인허브 광고 대시보드</div>
+      <div class="nav-sub">Meta Ads · CTR / CPC 기반 ON/OFF 판정</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-file" id="nav-file-name"></span>
+    <label class="nav-upload-btn">
+      📂 엑셀 업로드
+      <input type="file" id="nav-file-input" accept=".xlsx,.xls">
+    </label>
+  </div>
+</nav>
+
+<!-- UPLOAD SCREEN -->
+<div class="upload-screen" id="upload-screen">
+  <div class="upload-card">
+    <div class="upload-icon">📊</div>
+    <h2>메타광고 데이터 업로드</h2>
+    <p>메타 광고 관리자에서 내보낸 엑셀 파일을 업로드하면<br>CTR · CPC · ROAS 기반으로 소재를 자동 분석합니다.</p>
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".xlsx,.xls">
+      <div style="font-size:32px;margin-bottom:.75rem">📥</div>
+      <div class="drop-zone-label"><strong>파일 선택</strong> 또는 여기로 끌어다 놓기</div>
+      <div class="upload-hint">지원 형식: .xlsx, .xls · 광고명, CTR, CPC, 지출금액, 노출 컬럼 포함 파일</div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard">
+
+  <!-- KPI -->
+  <div class="kpi-strip" id="kpi-strip"></div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">CTR</span>
+      <button class="pill p-all" data-ctr="all"     onclick="setCTR(this)">전체</button>
+      <button class="pill"       data-ctr="under2"  onclick="setCTR(this)">2% 미만</button>
+      <button class="pill"       data-ctr="under3"  onclick="setCTR(this)">3% 미만</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">CPC</span>
+      <button class="pill p-all" data-cpc="all"      onclick="setCPC(this)">전체</button>
+      <button class="pill"       data-cpc="over1500" onclick="setCPC(this)">1,500원 초과</button>
+      <button class="pill"       data-cpc="over3000" onclick="setCPC(this)">3,000원 초과</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">광고비</span>
+      <button class="pill p-all" data-sp="all"    onclick="setSpend(this)">전체</button>
+      <button class="pill"       data-sp="na"     onclick="setSpend(this)">데이터 미달 &lt;1만</button>
+      <button class="pill"       data-sp="test"   onclick="setSpend(this)">테스트 1~5만</button>
+      <button class="pill"       data-sp="normal" onclick="setSpend(this)">정상 5~20만</button>
+      <button class="pill"       data-sp="high"   onclick="setSpend(this)">고소진 20만+</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">판정</span>
+      <button class="pill p-all" data-j="all"    onclick="setJudge(this)">전체</button>
+      <button class="pill"       data-j="off"    onclick="setJudge(this)">즉시 OFF</button>
+      <button class="pill"       data-j="urgent" onclick="setJudge(this)">긴급 검토</button>
+      <button class="pill"       data-j="high_burn" onclick="setJudge(this)">고소진 경고</button>
+      <button class="pill"       data-j="rec"    onclick="setJudge(this)">스케일업 추천</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">상품</span>
+      <select class="filter-select" id="product-filter" onchange="applyFilters()">
+        <option value="">전체 상품</option>
+      </select>
+      <select class="filter-select" id="division-filter" onchange="applyFilters()">
+        <option value="">전체 사업부</option>
+        <option value="Medical">Medical</option>
+        <option value="Healthcare">Healthcare</option>
+      </select>
+    </div>
+    <div class="filter-right" id="result-count"></div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:260px" onclick="sortBy('name')">광고명 <span class="sort-icon">↕</span></th>
+          <th style="width:110px" onclick="sortBy('product')">상품 <span class="sort-icon">↕</span></th>
+          <th style="width:80px"  onclick="sortBy('div')">사업부 <span class="sort-icon">↕</span></th>
+          <th style="width:72px"  onclick="sortBy('ctr')">CTR(%) <span class="sort-icon">↕</span></th>
+          <th style="width:90px"  onclick="sortBy('cpc')">CPC(원) <span class="sort-icon">↕</span></th>
+          <th style="width:72px"  onclick="sortBy('roas')">ROAS <span class="sort-icon">↕</span></th>
+          <th style="width:100px" onclick="sortBy('spend')">광고비(원) <span class="sort-icon">↕</span></th>
+          <th style="width:85px"  onclick="sortBy('imp')">노출 <span class="sort-icon">↕</span></th>
+          <th style="width:100px" onclick="sortBy('judgment')">판정 <span class="sort-icon">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <!-- GUIDE -->
+  <div class="guide">
+    <div class="guide-item"><div class="guide-dot" style="background:var(--red)"></div><div><strong>즉시 OFF</strong> — CTR &lt; 1% + CPC &gt; 3,000원 동시 / CTR &lt; 0.5% / CPC &gt; 5,000원</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:var(--orange)"></div><div><strong>긴급 검토</strong> — CTR &lt; 1.0% 또는 CPC &gt; 3,000원 단독 (3일 내 결정)</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:#880e4f"></div><div><strong>고소진 경고</strong> — 광고비 200,000원↑ + ROAS &lt; 3.0x (예산 낭비 위험)</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:var(--amber)"></div><div><strong>ROAS 경고</strong> — 픽셀 ROAS &lt; 3.0x (소진 ≥ 50,000원)</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:#b8860b"></div><div><strong>주의 관찰</strong> — CTR 1~2% 또는 CPC 1,500~3,000원</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:var(--green-700)"></div><div><strong>정상 운영</strong> — CTR ≥ 2% + CPC ≤ 1,500원</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:var(--blue)"></div><div><strong>스케일업 추천</strong> — CTR ≥ 3% + CPC ≤ 1,000원 + ROAS ≥ 5x</div></div>
+    <div class="guide-item"><div class="guide-dot" style="background:#aaa"></div><div><strong>광고비 구간</strong> — &lt;1만: 데이터 미달 · 1~5만: 테스트 중 · 5~20만: 정상 운영 · 20만↑: 고소진 (우선 점검)</div></div>
+  </div>
+
+</div>
+
+<script>
+let allRows = [];
+let ctrFilter = 'all', cpcFilter = 'all', judgeFilter = 'all', spendFilter = 'all';
+let sortKey = 'spend', sortDir = -1;
+
+/* ── 상품/사업부 분류 ── */
+function classify(name, adset) {
+  const n = (name  || '').toLowerCase();
+  const a = (adset || '').toLowerCase();
+  const div = (a.includes('medical division') || n.includes('medical division')) ? 'Medical' : 'Healthcare';
+  let product = '기타';
+  if      (n.includes('yeolicha') || n.includes('여리차'))        product = '여리차';
+  else if (n.includes('slim_detox_set'))                           product = '슬림+디톡스 세트';
+  else if (n.includes('diet_yeolicha_set'))                        product = '다이어트+여리차 세트';
+  else if (n.includes('belly')  || n.includes('벨리라잇'))         product = '벨리라잇';
+  else if ((n.includes('burning') && n.includes('cheating')) ||
+            n.includes('burningcheating') || n.includes('버치세트')) product = '버닝온+치팅온';
+  else if (n.includes('burningprotein'))                           product = '버닝온+프로틴';
+  else if (n.includes('cheating') || n.includes('치팅온'))         product = '치팅온';
+  else if (n.includes('burning') || n.includes('버닝온') ||
+           n.includes('need_burning'))                             product = '버닝온';
+  else if (n.includes('slim')   || n.includes('슬림이팩터'))       product = '슬림이팩터';
+  else if (n.includes('appetite')|| n.includes('다이어트환'))      product = '다이어트환';
+  else if (n.includes('moomoo') || n.includes('무무젤리'))         product = '무무젤리';
+  else if (n.includes('detox')  || n.includes('디톡스환'))         product = '디톡스환';
+  else if (n.includes('protein')|| n.includes('프로틴'))           product = '플랜트프로틴';
+  else if (n.includes('promotion'))                                product = '프로모션';
+  return { div, product };
+}
+
+/* ── 광고비 구간 분류 ── */
+function spendTier(spend) {
+  if (spend < 10000)  return 'na';
+  if (spend < 50000)  return 'test';
+  if (spend < 200000) return 'normal';
+  return 'high';
+}
+
+/* ── ON/OFF 판정 ── */
+function judge(ctr, cpc, roas, spend) {
+  if (spend < 5000) return 'na';
+  if ((ctr < 1.0 && cpc > 3000) || ctr < 0.5 || cpc > 5000) return 'off';
+  if (ctr < 1.0 || cpc > 3000) return 'urgent';
+  if (spend >= 200000 && roas > 0 && roas < 3.0) return 'high_burn';
+  if (roas > 0 && roas < 3.0 && spend >= 50000) return 'roas';
+  if (ctr >= 3.0 && cpc <= 1000 && roas >= 5.0) return 'rec';
+  if ((ctr >= 1.0 && ctr < 2.0) || (cpc > 1500 && cpc <= 3000)) return 'warn';
+  return 'ok';
+}
+
+/* ── 파일 파싱 ── */
+function parseFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!raw.length) { alert('데이터가 없습니다.'); return; }
+
+      /* 컬럼 매핑 */
+      const cm = {};
+      Object.keys(raw[0]).forEach(k => {
+        const kl = k.toLowerCase();
+        if (kl.includes('광고 이름') || kl === '광고명' || kl === 'ad name' || kl.includes('ad name')) cm.name   = k;
+        if (kl.includes('광고 세트') || kl.includes('adset') || kl.includes('ad set'))                  cm.adset  = k;
+        if (kl.includes('ctr(전체)') || kl === 'ctr(전체)') cm.ctr  = k;
+        else if (!cm.ctr  && kl.includes('ctr'))  cm.ctr  = k;
+        if (kl.includes('cpc(전체)') || kl === 'cpc(전체) (krw)') cm.cpc  = k;
+        else if (!cm.cpc  && kl.includes('cpc'))  cm.cpc  = k;
+        if (kl.includes('구매 roas') || kl.includes('purchase roas')) cm.roas = k;
+        else if (!cm.roas && kl.includes('roas'))  cm.roas = k;
+        if (kl.includes('지출 금액') || kl.includes('amount spent') || kl.includes('spend')) cm.spend = k;
+        if (kl.includes('노출')     || kl.includes('impression'))    cm.imp   = k;
+        if (kl.includes('클릭(전체)') || kl.includes('clicks'))      cm.click = k;
+      });
+
+      allRows = raw
+        .filter(r => (parseFloat(r[cm.imp]) || 0) >= 100)
+        .map(r => {
+          const name  = String(r[cm.name]  || '');
+          const adset = String(r[cm.adset] || '');
+          const ctr   = parseFloat(r[cm.ctr])   || 0;
+          const cpc   = parseFloat(r[cm.cpc])   || 0;
+          const roas  = parseFloat(r[cm.roas])  || 0;
+          const spend = parseFloat(r[cm.spend]) || 0;
+          const imp   = parseFloat(r[cm.imp])   || 0;
+          const { div, product } = classify(name, adset);
+          const tier = spendTier(spend);
+          return { name, adset, ctr, cpc, roas, spend, imp, div, product, tier,
+                   judgment: judge(ctr, cpc, roas, spend) };
+        });
+
+      document.getElementById('nav-file-name').textContent = file.name;
+      buildProductFilter();
+      document.getElementById('upload-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display     = 'block';
+      applyFilters();
+    } catch (err) {
+      alert('파일 파싱 오류: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ── 상품 필터 드롭다운 ── */
+function buildProductFilter() {
+  const sel = document.getElementById('product-filter');
+  const products = [...new Set(allRows.map(r => r.product))].sort();
+  sel.innerHTML = '<option value="">전체 상품</option>' +
+    products.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function setCTR(btn) {
+  document.querySelectorAll('[data-ctr]').forEach(b => b.className = 'pill');
+  ctrFilter = btn.dataset.ctr;
+  btn.className = 'pill ' + (ctrFilter === 'all' ? 'p-all' : ctrFilter === 'under2' ? 'p-warn' : 'p-danger');
+  applyFilters();
+}
+function setCPC(btn) {
+  document.querySelectorAll('[data-cpc]').forEach(b => b.className = 'pill');
+  cpcFilter = btn.dataset.cpc;
+  btn.className = 'pill ' + (cpcFilter === 'all' ? 'p-all' : cpcFilter === 'over1500' ? 'p-warn' : 'p-danger');
+  applyFilters();
+}
+function setSpend(btn) {
+  document.querySelectorAll('[data-sp]').forEach(b => b.className = 'pill');
+  spendFilter = btn.dataset.sp;
+  const cls = { all:'p-all', na:'p-warn', test:'p-warn', normal:'p-good', high:'p-high' }[spendFilter] || 'p-all';
+  btn.className = 'pill ' + cls;
+  applyFilters();
+}
+function setJudge(btn) {
+  document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
+  judgeFilter = btn.dataset.j;
+  const cls = { all:'p-all', off:'p-danger', urgent:'p-orange', high_burn:'p-high', rec:'p-blue' }[judgeFilter] || 'p-all';
+  btn.className = 'pill ' + cls;
+  applyFilters();
+}
+
+/* ── 정렬 ── */
+function sortBy(key) {
+  document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
+  const ths = document.querySelectorAll('thead th');
+  const keys = ['name','product','div','ctr','cpc','roas','spend','imp','judgment'];
+  const idx  = keys.indexOf(key);
+  if (idx >= 0) ths[idx].classList.add('sorted');
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = key === 'name' || key === 'product' || key === 'div' ? 1 : -1; }
+  applyFilters();
+}
+
+/* ── 메인 필터+렌더 ── */
+function applyFilters() {
+  const prodF = document.getElementById('product-filter').value;
+  const divF  = document.getElementById('division-filter').value;
+  let rows = [...allRows];
+
+  if (ctrFilter === 'under2') rows = rows.filter(r => r.ctr < 2);
+  else if (ctrFilter === 'under3') rows = rows.filter(r => r.ctr < 3);
+
+  if (cpcFilter === 'over1500') rows = rows.filter(r => r.cpc > 1500);
+  else if (cpcFilter === 'over3000') rows = rows.filter(r => r.cpc > 3000);
+
+  if (spendFilter !== 'all') rows = rows.filter(r => r.tier === spendFilter);
+
+  if (judgeFilter === 'off')       rows = rows.filter(r => r.judgment === 'off');
+  else if (judgeFilter === 'urgent')   rows = rows.filter(r => ['off','urgent'].includes(r.judgment));
+  else if (judgeFilter === 'high_burn') rows = rows.filter(r => r.judgment === 'high_burn');
+  else if (judgeFilter === 'rec')      rows = rows.filter(r => r.judgment === 'rec');
+
+  if (prodF) rows = rows.filter(r => r.product === prodF);
+  if (divF)  rows = rows.filter(r => r.div     === divF);
+
+  rows.sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+    return ((av || 0) - (bv || 0)) * sortDir;
+  });
+
+  renderKPI(rows);
+  renderTable(rows);
+  document.getElementById('result-count').textContent = rows.length.toLocaleString() + '개 소재';
+}
+
+/* ── KPI 렌더 ── */
+function renderKPI(rows) {
+  const offCnt      = rows.filter(r => r.judgment === 'off').length;
+  const urgentCnt   = rows.filter(r => r.judgment === 'urgent').length;
+  const highBurnCnt = rows.filter(r => r.judgment === 'high_burn').length;
+  const recCnt      = rows.filter(r => r.judgment === 'rec').length;
+  const totalSpend = rows.reduce((s,r) => s + r.spend, 0);
+  const totalClicks = rows.reduce((s,r) => s + (r.cpc > 0 ? r.spend / r.cpc : 0), 0);
+  const avgCTR = rows.length ? rows.reduce((s,r) => s + r.ctr, 0) / rows.length : 0;
+  const avgCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
+  const roasRows = rows.filter(r => r.roas > 0);
+  const avgROAS  = roasRows.length ? roasRows.reduce((s,r) => s + r.roas, 0) / roasRows.length : 0;
+
+  document.getElementById('kpi-strip').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">필터 소재 수</div>
+      <div class="kpi-val">${rows.length}</div>
+      <div class="kpi-sub">전체 ${allRows.length}개 중</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">즉시 OFF</div>
+      <div class="kpi-val danger">${offCnt}</div>
+      <div class="kpi-sub">즉각 중지 필요</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">긴급 검토</div>
+      <div class="kpi-val warn">${urgentCnt}</div>
+      <div class="kpi-sub">3일 내 결정</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">고소진 경고</div>
+      <div class="kpi-val" style="color:#880e4f">${highBurnCnt}</div>
+      <div class="kpi-sub">20만↑ + ROAS &lt; 3x</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">스케일업 추천</div>
+      <div class="kpi-val blue">${recCnt}</div>
+      <div class="kpi-sub">예산 증액 후보</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">평균 CTR</div>
+      <div class="kpi-val ${avgCTR < 1 ? 'danger' : avgCTR < 2 ? 'warn' : 'good'}">${avgCTR.toFixed(2)}%</div>
+      <div class="kpi-sub">기준: ≥ 2.0%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">평균 CPC</div>
+      <div class="kpi-val ${avgCPC > 3000 ? 'danger' : avgCPC > 1500 ? 'warn' : 'good'}">₩${Math.round(avgCPC).toLocaleString()}</div>
+      <div class="kpi-sub">기준: ≤ 1,500원</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">총 광고비</div>
+      <div class="kpi-val">₩${(totalSpend / 10000).toFixed(0)}만</div>
+      <div class="kpi-sub">${(totalSpend / 100000000).toFixed(2)}억원</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">평균 픽셀 ROAS</div>
+      <div class="kpi-val ${avgROAS < 3 ? 'warn' : 'good'}">${avgROAS.toFixed(1)}x</div>
+      <div class="kpi-sub">기준: ≥ 3.0x</div>
+    </div>
+  `;
+}
+
+/* ── 테이블 렌더 ── */
+const JM = {
+  off:       { label: '즉시 OFF',    cls: 'b-off' },
+  urgent:    { label: '긴급 검토',   cls: 'b-urgent' },
+  high_burn: { label: '고소진 경고', cls: 'b-high' },
+  roas:      { label: 'ROAS 경고',  cls: 'b-roas' },
+  warn:      { label: '주의 관찰',   cls: 'b-warn' },
+  ok:        { label: '정상 운영',   cls: 'b-ok' },
+  rec:       { label: '스케일업',    cls: 'b-rec' },
+  na:        { label: '데이터 부족', cls: 'b-na' },
+};
+
+const TIER_LABEL = {
+  na:     { txt: '미달',   cls: 'spend-na' },
+  test:   { txt: '테스트', cls: 'spend-test' },
+  normal: { txt: '정상',   cls: 'spend-normal' },
+  high:   { txt: '고소진', cls: 'spend-high' },
+};
+
+function renderTable(rows) {
+  const tbody = document.getElementById('table-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">조건에 맞는 소재가 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const ctrCls  = r.ctr  < 1    ? 'num red' : r.ctr  < 2    ? 'num orange' : 'num good';
+    const cpcCls  = r.cpc  > 3000 ? 'num red' : r.cpc  > 1500 ? 'num orange' : 'num good';
+    const roasCls = r.roas >= 5   ? 'num good': r.roas >= 3   ? 'num blue'   : r.roas > 0 ? 'num red' : 'num muted';
+    const jm      = JM[r.judgment] || JM.na;
+    const tier    = TIER_LABEL[r.tier] || TIER_LABEL.normal;
+    const short   = r.name.length > 38 ? r.name.slice(0,36) + '…' : r.name;
+    const tagCls  = r.div === 'Medical' ? 'tag tag-med' : 'tag tag-hc';
+    const spendDisp = Math.round(r.spend).toLocaleString();
+    const spendCls  = r.tier === 'high' ? 'num spend-high' : 'num';
+    return `<tr>
+      <td><span class="ad-name" title="${r.name}">${short}</span><span class="ad-adset">${r.adset.length > 36 ? r.adset.slice(0,34)+'…' : r.adset}</span></td>
+      <td style="font-size:11px">${r.product}</td>
+      <td><span class="${tagCls}">${r.div}</span></td>
+      <td class="${ctrCls}">${r.ctr.toFixed(2)}</td>
+      <td class="${cpcCls}">${Math.round(r.cpc).toLocaleString()}</td>
+      <td class="${roasCls}">${r.roas > 0 ? r.roas.toFixed(1)+'x' : '-'}</td>
+      <td class="${spendCls}" title="${tier.txt}">${spendDisp} <span class="${tier.cls}" style="font-size:10px">(${tier.txt})</span></td>
+      <td class="num muted">${Math.round(r.imp).toLocaleString()}</td>
+      <td><span class="badge ${jm.cls}">${jm.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── 이벤트 바인딩 ── */
+function bindUpload(inputId) {
+  document.getElementById(inputId).addEventListener('change', e => {
+    if (e.target.files[0]) parseFile(e.target.files[0]);
+  });
+}
+bindUpload('file-input');
+bindUpload('nav-file-input');
+
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) parseFile(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
