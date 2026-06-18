@@ -187,6 +187,8 @@
   .pill.p-blue   { background: var(--blue-bg);  color: var(--blue);  border-color: var(--blue); }
   .pill.p-purple { background: #f3e5f5; color: #6a1b9a; border-color: #6a1b9a; }
   .pill.p-high   { background: #fce4ec; color: #880e4f; border-color: #880e4f; }
+  .pill.multi-on { font-weight: 700; }
+  .pill.multi-on::before { content: '✓ '; font-size: 10px; }
 
   select.filter-select {
     border: 1px solid var(--border);
@@ -332,7 +334,15 @@
   tbody tr.row-off:hover td { color: var(--text); }
   tbody tr.row-off:hover .ad-name { color: var(--text); }
 
-  .empty-row td { text-align: center; padding: 3rem; color: var(--muted); }
+  #product-summary-table thead th {
+    position: static;
+    background: #f0f4f2;
+    top: auto;
+  }
+  .no-sticky thead th {
+    position: static !important;
+    top: auto !important;
+  }
 
   /* GUIDE */
   .guide {
@@ -371,6 +381,9 @@
   </div>
   <div class="nav-right">
     <span class="nav-file" id="nav-file-name"></span>
+    <button class="nav-upload-btn" style="background:var(--navy-mid);border:1px solid rgba(255,255,255,.2)" onclick="openJasamolPopup()" title="자사몰 매출 입력 (직접 입력 또는 이미지 업로드)">
+      📊 자사몰 매출
+    </button>
     <label class="nav-upload-btn">
       📂 엑셀 업로드
       <input type="file" id="nav-file-input" accept=".xlsx,.xls">
@@ -393,21 +406,76 @@
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div class="dashboard" id="dashboard">
+<!-- 팝업: 광고명 전체 -->
+<div class="name-popup-overlay" id="name-popup-overlay" onclick="closeNamePopup(event)">
+  <div class="name-popup">
+    <div class="name-popup-label">광고명 전체</div>
+    <div class="name-popup-text" id="popup-name-text"></div>
+    <div class="name-popup-meta" id="popup-name-meta"></div>
+    <div class="name-popup-actions">
+      <button class="popup-copy-btn" id="popup-copy-btn" onclick="popupCopy()">클립보드에 복사</button>
+      <button class="popup-close-btn" onclick="closeNamePopup()">닫기</button>
+    </div>
+  </div>
+</div>
 
-  <!-- 광고명 팝업 -->
-  <div class="name-popup-overlay" id="name-popup-overlay" onclick="closeNamePopup(event)">
-    <div class="name-popup">
-      <div class="name-popup-label">광고명 전체</div>
-      <div class="name-popup-text" id="popup-name-text"></div>
-      <div class="name-popup-meta" id="popup-name-meta"></div>
-      <div class="name-popup-actions">
-        <button class="popup-copy-btn" id="popup-copy-btn" onclick="popupCopy()">클립보드에 복사</button>
-        <button class="popup-close-btn" onclick="closeNamePopup()">닫기</button>
+<!-- 팝업: 자사몰 매출 입력 -->
+<div class="name-popup-overlay" id="jasamol-popup" onclick="closeJasamolPopup(event)">
+  <div class="name-popup" style="max-width:700px">
+    <div class="name-popup-label">📊 자사몰 매출 입력</div>
+
+    <!-- 탭 -->
+    <div style="display:flex;gap:0;margin-bottom:1.25rem;border-bottom:1px solid var(--border)">
+      <button id="tab-manual" onclick="switchJasamolTab('manual')"
+        style="padding:8px 18px;font-size:12px;font-weight:600;border:none;border-bottom:2px solid var(--green-700);background:none;color:var(--green-700);cursor:pointer">
+        ✏️ 직접 입력
+      </button>
+      <button id="tab-image" onclick="switchJasamolTab('image')"
+        style="padding:8px 18px;font-size:12px;font-weight:500;border:none;border-bottom:2px solid transparent;background:none;color:var(--muted);cursor:pointer">
+        🖼️ 이미지 업로드
+      </button>
+    </div>
+
+    <!-- 직접 입력 탭 -->
+    <div id="panel-manual">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:.875rem">상품별 자사몰 매출을 입력하세요 (원 단위). 빈 칸은 0으로 처리됩니다.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:360px;overflow-y:auto;padding-right:4px" id="manual-inputs"></div>
+      <div style="margin-top:1rem;padding:.75rem 1rem;background:var(--bg);border-radius:8px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--muted)">입력 매출 합계</span>
+        <span id="manual-total" style="font-weight:700;color:var(--green-700);font-size:14px">₩0</span>
+      </div>
+      <div class="name-popup-actions" style="margin-top:1rem">
+        <button class="popup-copy-btn" onclick="applyManualJasamol()">실ROAS 적용</button>
+        <button class="popup-close-btn" onclick="closeJasamolPopup()">닫기</button>
+      </div>
+    </div>
+
+    <!-- 이미지 업로드 탭 -->
+    <div id="panel-image" style="display:none">
+      <div id="jasamol-status" style="font-size:13px;color:var(--muted);margin-bottom:1rem">이미지를 선택하면 자동으로 분석합니다.</div>
+      <label style="display:block;border:1.5px dashed var(--border);border-radius:8px;padding:1.25rem;text-align:center;cursor:pointer;margin-bottom:1rem">
+        <input type="file" id="jasamol-file-input" accept="image/*" style="display:none" onchange="handleJasamolFile(this)">
+        <div style="font-size:24px;margin-bottom:.5rem">📥</div>
+        <div style="font-size:13px;color:var(--muted)"><strong style="color:var(--green-700)">이미지 선택</strong></div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px">자사몰 상품별 매출 화면 스크린샷</div>
+      </label>
+      <div id="jasamol-preview" style="margin-bottom:1rem;display:none">
+        <img id="jasamol-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border)" />
+      </div>
+      <div id="jasamol-result" style="display:none">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.5rem">파싱 결과</div>
+        <div id="jasamol-table" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+      </div>
+      <div class="name-popup-actions" style="margin-top:1rem">
+        <button class="popup-copy-btn" id="jasamol-apply-btn" onclick="applyJasamol()" style="display:none">실ROAS 적용</button>
+        <button class="popup-close-btn" onclick="closeJasamolPopup()">닫기</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard">
 
   <!-- KPI -->
   <div class="kpi-strip" id="kpi-strip"></div>
@@ -416,44 +484,50 @@
   <div class="filter-bar">
     <div class="filter-group">
       <span class="filter-label">CTR</span>
-      <button class="pill p-all" data-ctr="all"     onclick="setCTR(this)">전체</button>
-      <button class="pill"       data-ctr="under2"  onclick="setCTR(this)">2% 미만</button>
-      <button class="pill"       data-ctr="under3"  onclick="setCTR(this)">3% 미만</button>
+      <button class="pill p-all" data-ctr="all"      onclick="toggleCTR(this)">전체</button>
+      <button class="pill"       data-ctr="under05"  onclick="toggleCTR(this)">0.5% 미만</button>
+      <button class="pill"       data-ctr="05to1"    onclick="toggleCTR(this)">0.5~1%</button>
+      <button class="pill"       data-ctr="1to2"     onclick="toggleCTR(this)">1~2%</button>
+      <button class="pill"       data-ctr="2to3"     onclick="toggleCTR(this)">2~3%</button>
+      <button class="pill"       data-ctr="over3"    onclick="toggleCTR(this)">3% 이상</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
       <span class="filter-label">CPC</span>
-      <button class="pill p-all" data-cpc="all"      onclick="setCPC(this)">전체</button>
-      <button class="pill"       data-cpc="over1500" onclick="setCPC(this)">1,500원 초과</button>
-      <button class="pill"       data-cpc="over3000" onclick="setCPC(this)">3,000원 초과</button>
+      <button class="pill p-all" data-cpc="all"        onclick="toggleCPC(this)">전체</button>
+      <button class="pill"       data-cpc="under500"   onclick="toggleCPC(this)">500원 미만</button>
+      <button class="pill"       data-cpc="500to1000"  onclick="toggleCPC(this)">500~1,000</button>
+      <button class="pill"       data-cpc="1000to1500" onclick="toggleCPC(this)">1,000~1,500</button>
+      <button class="pill"       data-cpc="1500to3000" onclick="toggleCPC(this)">1,500~3,000</button>
+      <button class="pill"       data-cpc="over3000"   onclick="toggleCPC(this)">3,000원 초과</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
       <span class="filter-label">광고비</span>
-      <button class="pill p-all" data-sp="all"    onclick="setSpend(this)">전체</button>
-      <button class="pill"       data-sp="na"     onclick="setSpend(this)">데이터 미달 &lt;1만</button>
-      <button class="pill"       data-sp="test"   onclick="setSpend(this)">테스트 1~5만</button>
-      <button class="pill"       data-sp="normal" onclick="setSpend(this)">정상 5~20만</button>
-      <button class="pill"       data-sp="high"   onclick="setSpend(this)">고소진 20만+</button>
+      <button class="pill p-all" data-sp="all"    onclick="toggleSpend(this)">전체</button>
+      <button class="pill"       data-sp="na"     onclick="toggleSpend(this)">&lt;1만</button>
+      <button class="pill"       data-sp="test"   onclick="toggleSpend(this)">1~5만</button>
+      <button class="pill"       data-sp="normal" onclick="toggleSpend(this)">5~20만</button>
+      <button class="pill"       data-sp="high"   onclick="toggleSpend(this)">20만+</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
       <span class="filter-label">노출</span>
-      <button class="pill p-all" data-imp="all"   onclick="setImp(this)">전체</button>
-      <button class="pill"       data-imp="low"   onclick="setImp(this)">소량 &lt;1천</button>
-      <button class="pill"       data-imp="mid"   onclick="setImp(this)">보통 1천~1만</button>
-      <button class="pill"       data-imp="good"  onclick="setImp(this)">충분 1만~5만</button>
-      <button class="pill"       data-imp="high"  onclick="setImp(this)">고노출 5만+</button>
+      <button class="pill p-all" data-imp="all"   onclick="toggleImp(this)">전체</button>
+      <button class="pill"       data-imp="low"   onclick="toggleImp(this)">&lt;1천</button>
+      <button class="pill"       data-imp="mid"   onclick="toggleImp(this)">1천~1만</button>
+      <button class="pill"       data-imp="good"  onclick="toggleImp(this)">1만~5만</button>
+      <button class="pill"       data-imp="high"  onclick="toggleImp(this)">5만+</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
       <span class="filter-label">판정</span>
-      <button class="pill p-all" data-j="all"      onclick="setJudge(this)">전체</button>
-      <button class="pill"       data-j="off"      onclick="setJudge(this)">즉시 OFF</button>
-      <button class="pill"       data-j="urgent"   onclick="setJudge(this)">긴급 검토</button>
-      <button class="pill"       data-j="high_burn" onclick="setJudge(this)">고소진 경고</button>
-      <button class="pill"       data-j="low_imp"  onclick="setJudge(this)">노출 부족</button>
-      <button class="pill"       data-j="rec"      onclick="setJudge(this)">스케일업 추천</button>
+      <button class="pill p-all" data-j="all"       onclick="toggleJudge(this)">전체</button>
+      <button class="pill"       data-j="off"       onclick="toggleJudge(this)">즉시 OFF</button>
+      <button class="pill"       data-j="urgent"    onclick="toggleJudge(this)">긴급 검토</button>
+      <button class="pill"       data-j="high_burn" onclick="toggleJudge(this)">고소진 경고</button>
+      <button class="pill"       data-j="low_imp"   onclick="toggleJudge(this)">노출 부족</button>
+      <button class="pill"       data-j="rec"       onclick="toggleJudge(this)">스케일업</button>
     </div>
     <div class="sep"></div>
     <div class="filter-group">
@@ -483,6 +557,29 @@
       </select>
     </div>
     <div class="filter-right" id="result-count"></div>
+  </div>
+
+  <!-- 상품별 요약 테이블 -->
+  <div id="product-summary-wrap" style="display:none;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">상품별 성과 요약</div>
+      <div style="font-size:11px;color:var(--muted)">광고비는 전체 소재 합산 기준</div>
+    </div>
+    <div class="table-wrap no-sticky">
+      <table id="product-summary-table">
+        <thead>
+          <tr>
+            <th style="width:160px">상품</th>
+            <th style="width:100px;text-align:right">광고비(추정)</th>
+            <th style="width:110px;text-align:right">자사몰 매출</th>
+            <th style="width:80px;text-align:center">실ROAS</th>
+            <th style="width:80px;text-align:center">메타ROAS</th>
+            <th style="width:70px;text-align:center">매출비중</th>
+          </tr>
+        </thead>
+        <tbody id="product-summary-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- TABLE -->
@@ -523,32 +620,46 @@
 
 <script>
 let allRows = [];
-let ctrFilter = 'all', cpcFilter = 'all', judgeFilter = 'all', spendFilter = 'all', impFilter = 'all';
+let ctrFilters  = new Set(['all']), cpcFilters  = new Set(['all']);
+let spendFilters = new Set(['all']), impFilters  = new Set(['all']);
+let judgeFilters = new Set(['all']);
 let statusFilter = 'all', periodFilter = 'all';
 let sortKey = 'spend', sortDir = -1;
+let jasamolData = {}; // 자사몰 상품별 매출 {상품명: 매출액}
 
 /* ── 상품/사업부 분류 ── */
 function classify(name, adset) {
   const n = (name  || '').toLowerCase();
   const a = (adset || '').toLowerCase();
   const div = (a.includes('medical division') || n.includes('medical division')) ? 'Medical' : 'Healthcare';
+
   let product = '기타';
-  if      (n.includes('yeolicha') || n.includes('여리차'))        product = '여리차';
-  else if (n.includes('slim_detox_set'))                           product = '슬림+디톡스 세트';
-  else if (n.includes('diet_yeolicha_set'))                        product = '다이어트+여리차 세트';
-  else if (n.includes('belly')  || n.includes('벨리라잇'))         product = '벨리라잇';
-  else if ((n.includes('burning') && n.includes('cheating')) ||
-            n.includes('burningcheating') || n.includes('버치세트')) product = '버닝온+치팅온';
-  else if (n.includes('burningprotein'))                           product = '버닝온+프로틴';
-  else if (n.includes('cheating') || n.includes('치팅온'))         product = '치팅온';
-  else if (n.includes('burning') || n.includes('버닝온') ||
-           n.includes('need_burning'))                             product = '버닝온';
-  else if (n.includes('slim')   || n.includes('슬림이팩터'))       product = '슬림이팩터';
-  else if (n.includes('appetite')|| n.includes('다이어트환'))      product = '다이어트환';
-  else if (n.includes('moomoo') || n.includes('무무젤리'))         product = '무무젤리';
-  else if (n.includes('detox')  || n.includes('디톡스환'))         product = '디톡스환';
-  else if (n.includes('protein')|| n.includes('프로틴'))           product = '플랜트프로틴';
-  else if (n.includes('promotion'))                                product = '프로모션';
+  // 세트 상품 (구체적인 것 먼저)
+  if ((n.includes('burning') || n.includes('버닝')) && (n.includes('cheating') || n.includes('치팅')))
+    product = '버닝온+치팅온 세트';
+  else if ((n.includes('cheating') || n.includes('치팅')) && (n.includes('belly') || n.includes('벨리')))
+    product = '치팅온+벨리라잇 세트';
+  else if (n.includes('burningcheating') || n.includes('버치세트'))
+    product = '버닝온+치팅온 세트';
+  else if (n.includes('body') && (n.includes('challenge') || n.includes('챌린지')))
+    product = '바디챌린지 세트';
+  else if (n.includes('starter') || n.includes('스타터') || n.includes('식탐'))
+    product = '식탐조절 스타터팩';
+  else if (n.includes('3kg') || (n.includes('1week') || (n.includes('1주') && n.includes('diet'))))
+    product = '-3kg 1주 다이어트 세트';
+  else if (n.includes('slim_detox') || n.includes('solution') || n.includes('솔루션'))
+    product = '솔루션세트';
+  // 단품
+  else if (n.includes('yeolicha') || n.includes('여리차'))      product = '여리차';
+  else if (n.includes('belly') || n.includes('벨리라잇'))       product = '벨리라잇';
+  else if (n.includes('cheating') || n.includes('치팅온'))      product = '치팅온';
+  else if (n.includes('burning') || n.includes('버닝온') || n.includes('need_burning')) product = '버닝온';
+  else if (n.includes('slim') || n.includes('슬림이펙터') || n.includes('슬림이팩터'))  product = '슬림이펙터';
+  else if (n.includes('appetite') || n.includes('다이어트환'))   product = '다이어트환';
+  else if (n.includes('moomoo') || n.includes('무무젤리'))       product = '무무젤리';
+  else if (n.includes('detox') || n.includes('디톡스환'))        product = '디톡스환';
+  else if (n.includes('protein') || n.includes('프로틴') || n.includes('플랜트')) product = '플랜트 프로틴';
+
   return { div, product };
 }
 
@@ -721,40 +832,103 @@ function buildProductFilter() {
     products.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-function setCTR(btn) {
-  document.querySelectorAll('[data-ctr]').forEach(b => b.className = 'pill');
-  ctrFilter = btn.dataset.ctr;
-  btn.className = 'pill ' + (ctrFilter === 'all' ? 'p-all' : ctrFilter === 'under2' ? 'p-warn' : 'p-danger');
+/* ── CTR 멀티셀렉트 ── */
+function toggleCTR(btn) {
+  const val = btn.dataset.ctr;
+  if (val === 'all') {
+    ctrFilters = new Set(['all']);
+    document.querySelectorAll('[data-ctr]').forEach(b => {
+      b.className = 'pill' + (b.dataset.ctr === 'all' ? ' p-all' : '');
+    });
+  } else {
+    ctrFilters.delete('all');
+    document.querySelector('[data-ctr="all"]').className = 'pill';
+    if (ctrFilters.has(val)) {
+      ctrFilters.delete(val);
+      btn.className = 'pill';
+    } else {
+      ctrFilters.add(val);
+      const cls = ['under05','05to1','1to2'].includes(val) ? 'p-danger' : ['2to3'].includes(val) ? 'p-warn' : 'p-good';
+      btn.className = `pill ${cls} multi-on`;
+    }
+    if (ctrFilters.size === 0) {
+      ctrFilters.add('all');
+      document.querySelector('[data-ctr="all"]').className = 'pill p-all';
+    }
+  }
   applyFilters();
 }
-function setCPC(btn) {
-  document.querySelectorAll('[data-cpc]').forEach(b => b.className = 'pill');
-  cpcFilter = btn.dataset.cpc;
-  btn.className = 'pill ' + (cpcFilter === 'all' ? 'p-all' : cpcFilter === 'over1500' ? 'p-warn' : 'p-danger');
+
+/* ── CPC 멀티셀렉트 ── */
+function toggleCPC(btn) {
+  const val = btn.dataset.cpc;
+  if (val === 'all') {
+    cpcFilters = new Set(['all']);
+    document.querySelectorAll('[data-cpc]').forEach(b => {
+      b.className = 'pill' + (b.dataset.cpc === 'all' ? ' p-all' : '');
+    });
+  } else {
+    cpcFilters.delete('all');
+    document.querySelector('[data-cpc="all"]').className = 'pill';
+    if (cpcFilters.has(val)) {
+      cpcFilters.delete(val);
+      btn.className = 'pill';
+    } else {
+      cpcFilters.add(val);
+      const cls = ['over3000','1500to3000'].includes(val) ? 'p-danger' : ['1000to1500'].includes(val) ? 'p-warn' : 'p-good';
+      btn.className = `pill ${cls} multi-on`;
+    }
+    if (cpcFilters.size === 0) {
+      cpcFilters.add('all');
+      document.querySelector('[data-cpc="all"]').className = 'pill p-all';
+    }
+  }
   applyFilters();
 }
-function setSpend(btn) {
-  document.querySelectorAll('[data-sp]').forEach(b => b.className = 'pill');
-  spendFilter = btn.dataset.sp;
-  const cls = { all:'p-all', na:'p-warn', test:'p-warn', normal:'p-good', high:'p-high' }[spendFilter] || 'p-all';
-  btn.className = 'pill ' + cls;
-  applyFilters();
+/* ── 멀티셀렉트 토글 헬퍼 ── */
+function makeToggle(attrName, filterSet, colorMap) {
+  return function(btn) {
+    const val = btn.dataset[attrName];
+    if (val === 'all') {
+      filterSet.clear(); filterSet.add('all');
+      document.querySelectorAll(`[data-${attrName}]`).forEach(b => {
+        b.className = 'pill' + (b.dataset[attrName] === 'all' ? ' p-all' : '');
+      });
+    } else {
+      filterSet.delete('all');
+      document.querySelector(`[data-${attrName}="all"]`).className = 'pill';
+      if (filterSet.has(val)) {
+        filterSet.delete(val); btn.className = 'pill';
+      } else {
+        filterSet.add(val);
+        btn.className = `pill ${colorMap[val] || 'p-warn'} multi-on`;
+      }
+      if (filterSet.size === 0) {
+        filterSet.add('all');
+        document.querySelector(`[data-${attrName}="all"]`).className = 'pill p-all';
+      }
+    }
+    applyFilters();
+  };
 }
-function setImp(btn) {
-  document.querySelectorAll('[data-imp]').forEach(b => b.className = 'pill');
-  impFilter = btn.dataset.imp;
-  const cls = { all:'p-all', low:'p-warn', mid:'p-warn', good:'p-good', high:'p-blue' }[impFilter] || 'p-all';
-  btn.className = 'pill ' + cls;
-  applyFilters();
-}
+
+const toggleSpend = makeToggle('sp', spendFilters, {
+  na:'p-warn', test:'p-warn', normal:'p-good', high:'p-high'
+});
+const toggleImp = makeToggle('imp', impFilters, {
+  low:'p-warn', mid:'p-warn', good:'p-good', high:'p-blue'
+});
+const toggleJudge = makeToggle('j', judgeFilters, {
+  off:'p-danger', urgent:'p-orange', high_burn:'p-high', low_imp:'p-warn', rec:'p-blue'
+});
+
 function setStatus(btn) {
   document.querySelectorAll('[data-st]').forEach(b => b.className = 'pill');
   statusFilter = btn.dataset.st;
   const cls = { all:'p-all', on:'p-good', off:'p-danger' }[statusFilter] || 'p-all';
   btn.className = 'pill ' + cls;
-  // 상태 필터 변경 시 판정 필터 초기화
   if (statusFilter !== 'all') {
-    judgeFilter = 'all';
+    judgeFilters.clear(); judgeFilters.add('all');
     document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
     document.querySelector('[data-j="all"]').className = 'pill p-all';
   }
@@ -767,12 +941,224 @@ function setPeriod(btn) {
   btn.className = 'pill ' + cls;
   applyFilters();
 }
-function setJudge(btn) {
-  document.querySelectorAll('[data-j]').forEach(b => b.className = 'pill');
-  judgeFilter = btn.dataset.j;
-  const cls = { all:'p-all', off:'p-danger', urgent:'p-orange', high_burn:'p-high', low_imp:'p-warn', rec:'p-blue' }[judgeFilter] || 'p-all';
-  btn.className = 'pill ' + cls;
+
+/* ── 자사몰 이미지 업로드 & Claude API 파싱 ── */
+/* ── 자사몰 팝업 탭 전환 ── */
+const JASAMOL_PRODUCTS = [
+  '치팅온','버닝온','벨리라잇',
+  '버닝온+치팅온 세트','치팅온+벨리라잇 세트',
+  '플랜트 프로틴','다이어트환','무무젤리','슬림이펙터',
+  '바디챌린지 세트','식탐조절 스타터팩','-3kg 1주 다이어트 세트',
+  '여리차','디톡스환','솔루션세트'
+];
+
+function openJasamolPopup() {
+  buildManualInputs();
+  document.getElementById('jasamol-popup').classList.add('show');
+}
+
+function switchJasamolTab(tab) {
+  const isManual = tab === 'manual';
+  document.getElementById('panel-manual').style.display = isManual ? 'block' : 'none';
+  document.getElementById('panel-image').style.display  = isManual ? 'none'  : 'block';
+  document.getElementById('tab-manual').style.borderBottomColor = isManual ? 'var(--green-700)' : 'transparent';
+  document.getElementById('tab-manual').style.color = isManual ? 'var(--green-700)' : 'var(--muted)';
+  document.getElementById('tab-manual').style.fontWeight = isManual ? '600' : '500';
+  document.getElementById('tab-image').style.borderBottomColor = !isManual ? 'var(--green-700)' : 'transparent';
+  document.getElementById('tab-image').style.color = !isManual ? 'var(--green-700)' : 'var(--muted)';
+  document.getElementById('tab-image').style.fontWeight = !isManual ? '600' : '500';
+}
+
+function buildManualInputs() {
+  const container = document.getElementById('manual-inputs');
+  container.innerHTML = JASAMOL_PRODUCTS.map(p => {
+    const saved = jasamolData[p] || '';
+    return `<div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:11px;font-weight:500;color:var(--text)">${p}</label>
+      <input type="number" data-product="${p}"
+        value="${saved || ''}"
+        placeholder="0"
+        min="0"
+        oninput="updateManualTotal()"
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--surface);color:var(--text);outline:none;width:100%"
+        onfocus="this.style.borderColor='var(--green-700)'"
+        onblur="this.style.borderColor='var(--border)'">
+    </div>`;
+  }).join('');
+  updateManualTotal();
+}
+
+function updateManualTotal() {
+  const inputs = document.querySelectorAll('#manual-inputs input[data-product]');
+  let total = 0;
+  inputs.forEach(inp => { total += parseFloat(inp.value) || 0; });
+  document.getElementById('manual-total').textContent = '₩' + total.toLocaleString();
+}
+
+function applyManualJasamol() {
+  const inputs = document.querySelectorAll('#manual-inputs input[data-product]');
+  const newData = {};
+  inputs.forEach(inp => {
+    const val = parseFloat(inp.value) || 0;
+    if (val > 0) newData[inp.dataset.product] = val;
+  });
+  jasamolData = newData;
+  renderProductSummary();
   applyFilters();
+  document.getElementById('jasamol-popup').classList.remove('show');
+}
+
+function handleJasamolFile(input) {
+  if (input.files[0]) parseJasamolImage(input.files[0]);
+}
+
+function closeJasamolPopup(e) {
+  if (!e || e.target === document.getElementById('jasamol-popup'))
+    document.getElementById('jasamol-popup').classList.remove('show');
+}
+
+async function parseJasamolImage(file) {
+  switchJasamolTab('image');
+  document.getElementById('jasamol-status').textContent = '이미지 분석 중...';
+  document.getElementById('jasamol-result').style.display = 'none';
+  document.getElementById('jasamol-apply-btn').style.display = 'none';
+
+  // 이미지 미리보기
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result.split(',')[1];
+    const mimeType = file.type || 'image/png';
+
+    document.getElementById('jasamol-img').src = e.target.result;
+    document.getElementById('jasamol-preview').style.display = 'block';
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+              { type: 'text', text: `이 자사몰 매출 화면에서 상품별 매출 금액을 읽어줘.
+
+아래 확정 상품 목록 중 가장 가까운 것으로 매핑해서 반환해. 상품명을 임의로 만들지 말고 반드시 아래 목록 중 하나만 사용해.
+
+확정 상품 목록:
+- 치팅온
+- 버닝온
+- 벨리라잇
+- 버닝온+치팅온 세트
+- 치팅온+벨리라잇 세트
+- 플랜트 프로틴
+- 다이어트환
+- 무무젤리
+- 슬림이펙터
+- 바디챌린지 세트
+- 식탐조절 스타터팩
+- -3kg 1주 다이어트 세트
+- 여리차
+- 디톡스환
+- 솔루션세트
+
+매핑 규칙:
+- "[6월 골든타임 프로모션] 슬림이펙터", "슬림이펙터 3일 키트" → 슬림이펙터
+- "[2배 강력해진 리뉴얼] 버닝온" → 버닝온
+- "[GIP-01추가] 리뉴얼 치팅온" → 치팅온
+- "[GIP-01추가] 리뉴얼 버닝온+치팅온 세트" → 버닝온+치팅온 세트
+- "[6월 골든타임 프로모션] 리뉴얼 버닝온" → 버닝온
+- "바디라인 솔루션 세트", "가벼운 몸 솔루션 세트" → 솔루션세트
+- 같은 상품이 여러 행에 걸쳐 나오면 금액을 합산해서 하나로 반환해.
+
+반드시 JSON 형식으로만 응답해. 다른 텍스트 절대 금지.
+숫자는 원화 기준 정수 (112,177,400원 → 112177400).
+
+{"products":[{"name":"확정상품목록중하나","revenue":숫자},...]}` }
+            ]}
+          ]
+        })
+      });
+      const data = await resp.json();
+      const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+      // JSON 블록만 추출 (앞뒤 불필요한 텍스트, 마크다운 코드블록 제거)
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('JSON 형식을 찾을 수 없습니다. API 응답: ' + text.slice(0,100));
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // 상품명 정규화 → 확정 상품 목록으로 매핑
+      const productMap = {};
+
+      // ── 확정 상품 14종 + 솔루션세트 키워드 매핑 테이블 ──
+      const PRODUCT_MAP = [
+        // 세트 (구체적인 것 먼저)
+        { keys: ['버닝온+치팅온', '버닝+치팅', '버닝온치팅온', '버치세트', 'burningcheating'], product: '버닝온+치팅온 세트', multi: ['버닝','치팅'] },
+        { keys: ['치팅온+벨리라잇', '치팅+벨리', '치팅온벨리'], product: '치팅온+벨리라잇 세트', multi: ['치팅','벨리'] },
+        { keys: ['바디챌린지', '바디 챌린지', 'bodychallenge', 'body challenge'], product: '바디챌린지 세트' },
+        { keys: ['식탐조절', '식탐', '스타터팩', '스타터', 'starter'], product: '식탐조절 스타터팩' },
+        { keys: ['-3kg', '3kg 1주', '1주 다이어트', '3kg다이어트'], product: '-3kg 1주 다이어트 세트' },
+        { keys: ['바디라인 솔루션', '바디라인솔루션', '가벼운 몸 솔루션', '가벼운몸솔루션', '솔루션세트'], product: '솔루션세트' },
+        // 단품
+        { keys: ['여리차', 'yeolicha'], product: '여리차' },
+        { keys: ['벨리라잇', 'belly', 'bellyrait'], product: '벨리라잇' },
+        { keys: ['치팅온', '치팅', 'cheating'], product: '치팅온' },
+        { keys: ['버닝온', '버닝', 'burning'], product: '버닝온' },
+        { keys: ['슬림이펙터', '슬림이팩터', 'slim effector', 'slimeffector'], product: '슬림이펙터' },
+        { keys: ['다이어트환', '다이어트 환', 'appetite'], product: '다이어트환' },
+        { keys: ['무무젤리', '무무 젤리', 'moomoo'], product: '무무젤리' },
+        { keys: ['디톡스환', '디톡스 환', '디톡스', 'detox'], product: '디톡스환' },
+        { keys: ['플랜트 프로틴', '플랜트프로틴', '플랜트', '프로틴', 'protein', 'plant protein'], product: '플랜트 프로틴' },
+      ];
+
+      const mapToProduct = (rawName) => {
+        const n = rawName.replace(/\[.*?\]/g,'').replace(/\(.*?\)/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+        for (const rule of PRODUCT_MAP) {
+          // 단일 키워드 매칭
+          if (rule.keys.some(k => n.includes(k))) return rule.product;
+          // 복합 키워드 AND 매칭 (multi 있는 경우)
+          if (rule.multi && rule.multi.every(k => n.includes(k))) return rule.product;
+        }
+        return '기타';
+      };
+
+      (parsed.products || []).forEach(p => {
+        const key = mapToProduct(p.name);
+        if (!productMap[key]) productMap[key] = { revenue: 0, items: [] };
+        productMap[key].revenue += p.revenue;
+        productMap[key].items.push({ name: p.name, revenue: p.revenue });
+      });
+
+      jasamolData = Object.fromEntries(Object.entries(productMap).map(([k,v]) => [k, v.revenue]));
+
+      // 결과 테이블 렌더 - 상품별 합산 표시
+      const tableRows = Object.entries(productMap)
+        .sort((a,b) => b[1].revenue - a[1].revenue)
+        .map(([key, val]) => {
+          const sub = val.items.length > 1
+            ? val.items.map(i => `<div style="padding:3px 12px 3px 24px;font-size:10px;color:var(--muted);border-bottom:1px solid #f5f5f5;display:flex;justify-content:space-between"><span>↳ ${i.name}</span><span>${i.revenue.toLocaleString()}원</span></div>`).join('')
+            : '';
+          return `<div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px;background:var(--surface)">
+            <span style="font-weight:600">${key}</span>
+            <span style="font-weight:700;color:var(--green-700)">${val.revenue.toLocaleString()}원</span>
+          </div>${sub}`;
+        }).join('');
+      document.getElementById('jasamol-table').innerHTML = tableRows;
+      document.getElementById('jasamol-status').textContent = `✅ ${Object.keys(productMap).length}개 상품으로 합산 완료 (원본 ${parsed.products.length}개 항목)`;
+      document.getElementById('jasamol-result').style.display = 'block';
+      document.getElementById('jasamol-apply-btn').style.display = 'block';
+    } catch(err) {
+      document.getElementById('jasamol-status').textContent = '❌ 파싱 실패: ' + err.message;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyJasamol() {
+  renderProductSummary();
+  applyFilters();
+  document.getElementById('jasamol-popup').classList.remove('show');
 }
 
 /* ── 정렬 ── */
@@ -793,28 +1179,52 @@ function applyFilters() {
   const divF  = document.getElementById('division-filter').value;
   let rows = [...allRows];
 
-  if (ctrFilter === 'under2') rows = rows.filter(r => r.ctr < 2);
-  else if (ctrFilter === 'under3') rows = rows.filter(r => r.ctr < 3);
+  // CTR 멀티셀렉트 필터
+  if (!ctrFilters.has('all')) {
+    rows = rows.filter(r => {
+      return [...ctrFilters].some(f => {
+        if (f === 'under05')  return r.ctr < 0.5;
+        if (f === '05to1')    return r.ctr >= 0.5 && r.ctr < 1;
+        if (f === '1to2')     return r.ctr >= 1   && r.ctr < 2;
+        if (f === '2to3')     return r.ctr >= 2   && r.ctr < 3;
+        if (f === 'over3')    return r.ctr >= 3;
+        return false;
+      });
+    });
+  }
 
-  if (cpcFilter === 'over1500') rows = rows.filter(r => r.cpc > 1500);
-  else if (cpcFilter === 'over3000') rows = rows.filter(r => r.cpc > 3000);
+  // CPC 멀티셀렉트 필터
+  if (!cpcFilters.has('all')) {
+    rows = rows.filter(r => {
+      return [...cpcFilters].some(f => {
+        if (f === 'under500')   return r.cpc < 500;
+        if (f === '500to1000')  return r.cpc >= 500  && r.cpc < 1000;
+        if (f === '1000to1500') return r.cpc >= 1000 && r.cpc < 1500;
+        if (f === '1500to3000') return r.cpc >= 1500 && r.cpc < 3000;
+        if (f === 'over3000')   return r.cpc >= 3000;
+        return false;
+      });
+    });
+  }
 
-  if (spendFilter !== 'all') rows = rows.filter(r => r.tier === spendFilter);
+  if (!spendFilters.has('all')) rows = rows.filter(r => spendFilters.has(r.tier));
+  if (!impFilters.has('all'))   rows = rows.filter(r => impFilters.has(r.impTier));
 
-  if (impFilter !== 'all') rows = rows.filter(r => r.impTier === impFilter);
-
-  if (statusFilter === 'on')  rows = rows.filter(r => r.adStatus === 'on');
+  if (statusFilter === 'on')   rows = rows.filter(r => r.adStatus === 'on');
   else if (statusFilter === 'off') rows = rows.filter(r => r.adStatus === 'off');
 
-  if (periodFilter === 'fresh')  rows = rows.filter(r => r.runDays !== null && r.runDays <= 7);
+  if (periodFilter === 'fresh')       rows = rows.filter(r => r.runDays !== null && r.runDays <= 7);
   else if (periodFilter === 'recent') rows = rows.filter(r => r.runDays !== null && r.runDays > 7 && r.runDays <= 30);
   else if (periodFilter === 'old')    rows = rows.filter(r => r.runDays !== null && r.runDays > 30);
 
-  if (judgeFilter === 'off')         rows = rows.filter(r => r.judgment === 'off');
-  else if (judgeFilter === 'urgent')    rows = rows.filter(r => ['off','urgent'].includes(r.judgment));
-  else if (judgeFilter === 'high_burn') rows = rows.filter(r => r.judgment === 'high_burn');
-  else if (judgeFilter === 'low_imp')   rows = rows.filter(r => r.judgment === 'low_imp');
-  else if (judgeFilter === 'rec')       rows = rows.filter(r => r.judgment === 'rec');
+  if (!judgeFilters.has('all')) {
+    rows = rows.filter(r => {
+      return [...judgeFilters].some(f => {
+        if (f === 'urgent') return ['off','urgent'].includes(r.judgment);
+        return r.judgment === f;
+      });
+    });
+  }
 
   if (prodF) rows = rows.filter(r => r.product === prodF);
   if (divF)  rows = rows.filter(r => r.div     === divF);
@@ -826,8 +1236,75 @@ function applyFilters() {
   });
 
   renderKPI(rows);
+  renderProductSummary();
   renderTable(rows);
   document.getElementById('result-count').textContent = rows.length.toLocaleString() + '개 소재';
+}
+
+/* ── 상품별 요약 테이블 ── */
+function renderProductSummary() {
+  const wrap = document.getElementById('product-summary-wrap');
+  const tbody = document.getElementById('product-summary-body');
+  if (!Object.keys(jasamolData).length || !allRows.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+
+  // 상품별 광고비 + 메타ROAS 집계 (전체 소재 기준)
+  const productSpend = {}, productRoasSum = {}, productRoasCount = {};
+  allRows.forEach(r => {
+    const p = r.product;
+    if (!productSpend[p]) { productSpend[p] = 0; productRoasSum[p] = 0; productRoasCount[p] = 0; }
+    productSpend[p] += r.spend;
+    if (r.roas > 0) { productRoasSum[p] += r.roas; productRoasCount[p]++; }
+  });
+
+  // 자사몰 매출 전체 합계
+  const totalJasamol = Object.values(jasamolData).reduce((s,v) => s+v, 0);
+  const totalSpendAll = allRows.reduce((s,r) => s+r.spend, 0);
+
+  // 상품 목록 = 자사몰 데이터 기준 (매출 내림차순)
+  const products = Object.keys(jasamolData).sort((a,b) => jasamolData[b] - jasamolData[a]);
+  // 광고비는 있지만 자사몰 매출 없는 상품도 포함
+  Object.keys(productSpend).forEach(p => { if (!jasamolData[p] && productSpend[p] > 0) products.push(p); });
+
+  let rows = products.map(p => {
+    const spend = productSpend[p] || 0;
+    const revenue = jasamolData[p] || 0;
+    const realRoas = spend > 0 && revenue > 0 ? revenue / spend : null;
+    const metaRoas = productRoasCount[p] > 0 ? productRoasSum[p] / productRoasCount[p] : null;
+    const revShare = totalJasamol > 0 && revenue > 0 ? revenue / totalJasamol * 100 : null;
+
+    const realRoasClass = realRoas === null ? '' : realRoas >= 5 ? 'good' : realRoas >= 3 ? 'blue' : 'red';
+    const spendStr = spend > 0 ? `₩${(spend/10000).toFixed(0)}만` : '-';
+    const revStr   = revenue > 0 ? `<strong>₩${(revenue/10000).toFixed(0)}만</strong>` : '-';
+    const realStr  = realRoas !== null ? `<span class="num ${realRoasClass}">${realRoas.toFixed(1)}x</span>` : '-';
+    const metaStr  = metaRoas !== null ? `<span class="num ${metaRoas >= 5 ? 'good' : metaRoas >= 3 ? 'blue' : 'warn'}">${metaRoas.toFixed(1)}x</span>` : '-';
+    const shareStr = revShare !== null ? `${revShare.toFixed(0)}%` : '-';
+
+    return `<tr>
+      <td style="font-weight:500">${p}</td>
+      <td style="text-align:right;font-size:12px;color:var(--muted)">${spendStr}</td>
+      <td style="text-align:right;font-size:12px">${revStr}</td>
+      <td style="text-align:center;font-size:12px">${realStr}</td>
+      <td style="text-align:center;font-size:12px">${metaStr}</td>
+      <td style="text-align:center;font-size:12px;color:var(--muted)">${shareStr}</td>
+    </tr>`;
+  }).join('');
+
+  // 합계 행
+  const realROASAll = totalSpendAll > 0 && totalJasamol > 0 ? totalJasamol / totalSpendAll : null;
+  rows += `<tr style="background:var(--navy);color:#fff">
+    <td style="font-weight:700;color:#fff">합계</td>
+    <td style="text-align:right;font-size:12px;color:rgba(255,255,255,.7)">₩${(totalSpendAll/10000).toFixed(0)}만</td>
+    <td style="text-align:right;font-size:12px"><strong style="color:#fff">₩${(totalJasamol/10000).toFixed(0)}만</strong></td>
+    <td style="text-align:center;font-size:13px;font-weight:700;color:#20B374">${realROASAll ? realROASAll.toFixed(2)+'x' : '-'}</td>
+    <td style="text-align:center;color:rgba(255,255,255,.5)">-</td>
+    <td style="text-align:center;font-size:12px;color:rgba(255,255,255,.7)">100%</td>
+  </tr>`;
+
+  tbody.innerHTML = rows;
 }
 
 /* ── KPI 렌더 ── */
@@ -846,6 +1323,24 @@ function renderKPI(rows) {
   const avgCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
   const roasRows = rows.filter(r => r.roas > 0);
   const avgROAS  = roasRows.length ? roasRows.reduce((s,r) => s + r.roas, 0) / roasRows.length : 0;
+
+  // 자사몰 실ROAS 계산
+  // - 자사몰 매출: jasamolData에 있는 상품 전체 합산 (중복 없이 1회)
+  // - 광고비: 전체 소재 기준 (필터 무관)
+  const totalJasamol = Object.values(jasamolData).reduce((s, v) => s + v, 0);
+  const totalSpendAll = allRows.reduce((s, r) => s + r.spend, 0);
+  const realROAS = totalSpendAll > 0 && totalJasamol > 0 ? totalJasamol / totalSpendAll : 0;
+  const jasamolKPI = Object.keys(jasamolData).length > 0
+    ? `<div class="kpi-card" style="border-color:var(--green-700)">
+        <div class="kpi-label" style="color:var(--green-700)">자사몰 실ROAS</div>
+        <div class="kpi-val good">${realROAS.toFixed(2)}x</div>
+        <div class="kpi-sub">매출 ₩${(totalJasamol/10000).toFixed(0)}만 · 광고비 ₩${(totalSpendAll/10000).toFixed(0)}만 (전체)</div>
+       </div>`
+    : `<div class="kpi-card" style="border-style:dashed">
+        <div class="kpi-label">자사몰 실ROAS</div>
+        <div class="kpi-val" style="color:#ccc;font-size:14px">이미지 업로드</div>
+        <div class="kpi-sub">🖼️ 버튼으로 매출 이미지 추가</div>
+       </div>`;
 
   document.getElementById('kpi-strip').innerHTML = `
     <div class="kpi-card">
@@ -908,6 +1403,7 @@ function renderKPI(rows) {
       <div class="kpi-val ${avgROAS < 3 ? 'warn' : 'good'}">${avgROAS.toFixed(1)}x</div>
       <div class="kpi-sub">기준: ≥ 3.0x</div>
     </div>
+    ${jasamolKPI}
   `;
 }
 
@@ -942,13 +1438,13 @@ function renderTable(rows) {
   const tbody = document.getElementById('table-body');
   if (!rows.length) {
     const activeFilters = [];
-    if (ctrFilter !== 'all') activeFilters.push(`CTR: ${ctrFilter}`);
-    if (cpcFilter !== 'all') activeFilters.push(`CPC: ${cpcFilter}`);
-    if (spendFilter !== 'all') activeFilters.push(`광고비: ${spendFilter}`);
-    if (impFilter !== 'all') activeFilters.push(`노출: ${impFilter}`);
-    if (statusFilter !== 'all') activeFilters.push(`상태: ${statusFilter}`);
-    if (periodFilter !== 'all') activeFilters.push(`운영기간: ${periodFilter}`);
-    if (judgeFilter !== 'all') activeFilters.push(`판정: ${judgeFilter}`);
+    if (!ctrFilters.has('all'))   activeFilters.push(`CTR: ${[...ctrFilters].join(', ')}`);
+    if (!cpcFilters.has('all'))   activeFilters.push(`CPC: ${[...cpcFilters].join(', ')}`);
+    if (!spendFilters.has('all')) activeFilters.push(`광고비: ${[...spendFilters].join(', ')}`);
+    if (!impFilters.has('all'))   activeFilters.push(`노출: ${[...impFilters].join(', ')}`);
+    if (!judgeFilters.has('all')) activeFilters.push(`판정: ${[...judgeFilters].join(', ')}`);
+    if (statusFilter !== 'all')   activeFilters.push(`상태: ${statusFilter}`);
+    if (periodFilter !== 'all')   activeFilters.push(`운영기간: ${periodFilter}`);
     const filterMsg = activeFilters.length ? `<br><span style="font-size:11px;color:var(--muted)">활성 필터: ${activeFilters.join(' · ')}</span>` : '';
     tbody.innerHTML = `<tr class="empty-row"><td colspan="10">조건에 맞는 소재가 없습니다${filterMsg}</td></tr>`;
     return;
