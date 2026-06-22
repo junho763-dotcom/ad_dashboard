@@ -503,6 +503,25 @@
     </div>
     <div class="sep"></div>
     <div class="filter-group">
+      <span class="filter-label">빈도</span>
+      <button class="pill p-all" data-freq="all"      onclick="toggleFreq(this)">전체</button>
+      <button class="pill"       data-freq="under15"  onclick="toggleFreq(this)">1.5 미만</button>
+      <button class="pill"       data-freq="15to25"   onclick="toggleFreq(this)">1.5~2.5</button>
+      <button class="pill"       data-freq="25to4"    onclick="toggleFreq(this)">2.5~4</button>
+      <button class="pill"       data-freq="over4"    onclick="toggleFreq(this)">4 이상</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">링크클릭</span>
+      <button class="pill p-all" data-lc="all"      onclick="toggleLC(this)">전체</button>
+      <button class="pill"       data-lc="1to30"    onclick="toggleLC(this)">1~30</button>
+      <button class="pill"       data-lc="31to60"   onclick="toggleLC(this)">31~60</button>
+      <button class="pill"       data-lc="61to100"  onclick="toggleLC(this)">61~100</button>
+      <button class="pill"       data-lc="101to150" onclick="toggleLC(this)">101~150</button>
+      <button class="pill"       data-lc="over151"  onclick="toggleLC(this)">151 이상</button>
+    </div>
+    <div class="sep"></div>
+    <div class="filter-group">
       <span class="filter-label">광고비</span>
       <button class="pill p-all" data-sp="all"    onclick="toggleSpend(this)">전체</button>
       <button class="pill"       data-sp="na"     onclick="toggleSpend(this)">&lt;1만</button>
@@ -591,13 +610,13 @@
           <th style="width:90px"  onclick="sortBy('product')">상품 <span class="sort-icon">↕</span></th>
           <th style="width:56px"  onclick="sortBy('adStatus')">상태 <span class="sort-icon">↕</span></th>
           <th style="width:72px"  onclick="sortBy('runDays')">운영기간 <span class="sort-icon">↕</span></th>
+          <th style="width:58px"  onclick="sortBy('freq')">빈도 <span class="sort-icon">↕</span></th>
           <th style="width:60px"  onclick="sortBy('ctr')">CTR% <span class="sort-icon">↕</span></th>
           <th style="width:82px"  onclick="sortBy('cpc')">CPC(원) <span class="sort-icon">↕</span></th>
+          <th style="width:75px"  onclick="sortBy('linkClick')">링크클릭 <span class="sort-icon">↕</span></th>
           <th style="width:60px"  onclick="sortBy('roas')">ROAS <span class="sort-icon">↕</span></th>
           <th style="width:95px"  onclick="sortBy('spend')">광고비 <span class="sort-icon">↕</span></th>
           <th style="width:82px"  onclick="sortBy('imp')">노출 <span class="sort-icon">↕</span></th>
-          <th style="width:58px"  onclick="sortBy('freq')">빈도 <span class="sort-icon">↕</span></th>
-          <th style="width:75px"  onclick="sortBy('linkClick')">링크클릭 <span class="sort-icon">↕</span></th>
           <th style="width:95px"  onclick="sortBy('judgment')">판정 <span class="sort-icon">↕</span></th>
         </tr>
       </thead>
@@ -624,6 +643,7 @@
 let allRows = [];
 let ctrFilters  = new Set(['all']), cpcFilters  = new Set(['all']);
 let spendFilters = new Set(['all']), impFilters  = new Set(['all']);
+let freqFilters  = new Set(['all']), lcFilters   = new Set(['all']);
 let judgeFilters = new Set(['all']);
 let statusFilter = 'all', periodFilter = 'all';
 let sortKey = 'spend', sortDir = -1;
@@ -705,6 +725,11 @@ function parseFile(file) {
       const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
       if (!raw.length) { alert('데이터가 없습니다.'); return; }
 
+      // 첫 행의 실제 키 목록 콘솔 출력 (디버그)
+      console.log('SheetJS 파싱 첫 행 키:', Object.keys(raw[0]));
+      console.log('빈도 키 존재:', Object.keys(raw[0]).includes('빈도'));
+      console.log('빈도 값:', raw[0]['빈도']);
+
       /* 컬럼 매핑 - 공백·숨김문자 제거 후 비교 */
       const cm = {};
       const keys = Object.keys(raw[0]);
@@ -722,8 +747,8 @@ function parseFile(file) {
         if (!cm.spend  && (kl.includes('지출 금액') || kl.includes('amount spent'))) cm.spend = k;
         if (!cm.imp    && (kl === '노출' || kl === 'impressions' || kl === 'impression')) cm.imp = k;
         if (!cm.click  && (kl.includes('클릭') || kl.includes('click'))) cm.click = k;
-        if (!cm.freq   && (kl === '빈도' || kl === 'frequency')) cm.freq = k;
-        if (!cm.linkClick && (kl === '링크 클릭 수' || kl === 'link clicks' || kl === '링크클릭' || (kl.includes('링크') && kl.includes('클릭')))) cm.linkClick = k;
+        if (!cm.freq   && (kl === '빈도' || kl === 'frequency' || kl.includes('빈도'))) cm.freq = k;
+        if (!cm.linkClick && (kl === '링크 클릭 수' || kl === 'link clicks' || kl === '링크클릭' || kl === '링크 클릭' || (kl.includes('링크') && kl.includes('클릭')))) cm.linkClick = k;
         // 게재 상태 - '광고 게재' 포함이면 무조건 잡기
         if (!cm.status && kl.includes('게재')) cm.status = k;
         if (!cm.status && (kl === 'delivery' || kl === 'status' || kl.includes('delivery status'))) cm.status = k;
@@ -734,6 +759,8 @@ function parseFile(file) {
 
       // 매핑 결과 + 샘플값 콘솔 출력
       console.log('컬럼 매핑:', JSON.stringify(cm));
+      console.log('freq:', cm.freq || 'NOT FOUND', '/ linkClick:', cm.linkClick || 'NOT FOUND');
+      console.log('빈도 샘플값:', cm.freq ? raw[0][cm.freq] : 'N/A');
       if (cm.status) console.log('상태 컬럼 샘플:', [raw[0][cm.status], raw[1]?.[cm.status], raw[2]?.[cm.status]]);
       else console.warn('⚠️ 게재 상태 컬럼을 찾지 못했습니다. 전체 컬럼:', keys);
 
@@ -923,6 +950,12 @@ const toggleSpend = makeToggle('sp', spendFilters, {
 });
 const toggleImp = makeToggle('imp', impFilters, {
   low:'p-warn', mid:'p-warn', good:'p-good', high:'p-blue'
+});
+const toggleFreq = makeToggle('freq', freqFilters, {
+  under15:'p-good', '15to25':'p-warn', '25to4':'p-danger', over4:'p-danger'
+});
+const toggleLC = makeToggle('lc', lcFilters, {
+  '1to30':'p-warn', '31to60':'p-warn', '61to100':'p-all', '101to150':'p-good', over151:'p-good'
 });
 const toggleJudge = makeToggle('j', judgeFilters, {
   off:'p-danger', urgent:'p-orange', high_burn:'p-high', low_imp:'p-warn', rec:'p-blue'
@@ -1216,6 +1249,27 @@ function applyFilters() {
   if (!spendFilters.has('all')) rows = rows.filter(r => spendFilters.has(r.tier));
   if (!impFilters.has('all'))   rows = rows.filter(r => impFilters.has(r.impTier));
 
+  if (!freqFilters.has('all')) {
+    rows = rows.filter(r => [...freqFilters].some(f => {
+      if (f === 'under15')  return r.freq < 1.5;
+      if (f === '15to25')   return r.freq >= 1.5 && r.freq < 2.5;
+      if (f === '25to4')    return r.freq >= 2.5 && r.freq < 4;
+      if (f === 'over4')    return r.freq >= 4;
+      return false;
+    }));
+  }
+
+  if (!lcFilters.has('all')) {
+    rows = rows.filter(r => [...lcFilters].some(f => {
+      if (f === '1to30')    return r.linkClick >= 1   && r.linkClick <= 30;
+      if (f === '31to60')   return r.linkClick >= 31  && r.linkClick <= 60;
+      if (f === '61to100')  return r.linkClick >= 61  && r.linkClick <= 100;
+      if (f === '101to150') return r.linkClick >= 101 && r.linkClick <= 150;
+      if (f === 'over151')  return r.linkClick >= 151;
+      return false;
+    }));
+  }
+
   if (statusFilter === 'on')   rows = rows.filter(r => r.adStatus === 'on');
   else if (statusFilter === 'off') rows = rows.filter(r => r.adStatus === 'off');
 
@@ -1446,6 +1500,8 @@ function renderTable(rows) {
     const activeFilters = [];
     if (!ctrFilters.has('all'))   activeFilters.push(`CTR: ${[...ctrFilters].join(', ')}`);
     if (!cpcFilters.has('all'))   activeFilters.push(`CPC: ${[...cpcFilters].join(', ')}`);
+    if (!freqFilters.has('all'))  activeFilters.push(`빈도: ${[...freqFilters].join(', ')}`);
+    if (!lcFilters.has('all'))    activeFilters.push(`링크클릭: ${[...lcFilters].join(', ')}`);
     if (!spendFilters.has('all')) activeFilters.push(`광고비: ${[...spendFilters].join(', ')}`);
     if (!impFilters.has('all'))   activeFilters.push(`노출: ${[...impFilters].join(', ')}`);
     if (!judgeFilters.has('all')) activeFilters.push(`판정: ${[...judgeFilters].join(', ')}`);
@@ -1499,13 +1555,13 @@ function renderTable(rows) {
       <td style="font-size:11px">${r.product}</td>
       <td style="text-align:center;overflow:hidden">${statusBadge}</td>
       <td>${periodDisp}</td>
+      <td class="num ${r.freq >= 3 ? 'warn' : r.freq >= 2 ? '' : 'muted'}" style="text-align:center;font-size:12px">${r.freq > 0 ? r.freq.toFixed(2) : '-'}</td>
       <td class="${ctrCls}">${r.ctr.toFixed(2)}</td>
       <td class="${cpcCls}">${Math.round(r.cpc).toLocaleString()}</td>
+      <td class="num muted" style="text-align:right;font-size:12px">${r.linkClick > 0 ? r.linkClick.toLocaleString() : '-'}</td>
       <td class="${roasCls}">${r.roas > 0 ? r.roas.toFixed(1)+'x' : '-'}</td>
       <td class="${spendCls}">${spendDisp} <span class="${tier.cls}" style="font-size:10px">(${tier.txt})</span></td>
       <td class="${impCls}">${impDisp} <span class="${impTierL.cls}" style="font-size:10px">(${impTierL.txt})</span></td>
-      <td class="num ${r.freq >= 3 ? 'warn' : r.freq >= 2 ? '' : 'good'}" style="text-align:center">${r.freq > 0 ? r.freq.toFixed(2) : '-'}</td>
-      <td class="num" style="text-align:right">${r.linkClick > 0 ? r.linkClick.toLocaleString() : '-'}</td>
       <td><span class="badge ${jm.cls}">${jm.label}</span></td>
     </tr>`;
   }).join('');
