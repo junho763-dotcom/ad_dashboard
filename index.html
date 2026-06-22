@@ -596,6 +596,8 @@
           <th style="width:60px"  onclick="sortBy('roas')">ROAS <span class="sort-icon">↕</span></th>
           <th style="width:95px"  onclick="sortBy('spend')">광고비 <span class="sort-icon">↕</span></th>
           <th style="width:82px"  onclick="sortBy('imp')">노출 <span class="sort-icon">↕</span></th>
+          <th style="width:58px"  onclick="sortBy('freq')">빈도 <span class="sort-icon">↕</span></th>
+          <th style="width:75px"  onclick="sortBy('linkClick')">링크클릭 <span class="sort-icon">↕</span></th>
           <th style="width:95px"  onclick="sortBy('judgment')">판정 <span class="sort-icon">↕</span></th>
         </tr>
       </thead>
@@ -720,6 +722,8 @@ function parseFile(file) {
         if (!cm.spend  && (kl.includes('지출 금액') || kl.includes('amount spent'))) cm.spend = k;
         if (!cm.imp    && (kl === '노출' || kl === 'impressions' || kl === 'impression')) cm.imp = k;
         if (!cm.click  && (kl.includes('클릭') || kl.includes('click'))) cm.click = k;
+        if (!cm.freq   && (kl === '빈도' || kl === 'frequency')) cm.freq = k;
+        if (!cm.linkClick && (kl === '링크 클릭 수' || kl === 'link clicks' || kl === '링크클릭' || (kl.includes('링크') && kl.includes('클릭')))) cm.linkClick = k;
         // 게재 상태 - '광고 게재' 포함이면 무조건 잡기
         if (!cm.status && kl.includes('게재')) cm.status = k;
         if (!cm.status && (kl === 'delivery' || kl === 'status' || kl.includes('delivery status'))) cm.status = k;
@@ -793,7 +797,9 @@ function parseFile(file) {
           const { div, product } = classify(name, adset);
           const tier_    = spendTier(spend);
           const impTier_ = impTier(imp);
-          return { name, adset, ctr, cpc, roas, spend, imp, div, product,
+          const freq      = parseFloat(r[cm.freq]      ) || 0;
+          const linkClick = parseFloat(r[cm.linkClick] ) || 0;
+          return { name, adset, ctr, cpc, roas, spend, imp, freq, linkClick, div, product,
                    tier: tier_, impTier: impTier_,
                    adStatus, startDate, endDate, runDays,
                    judgment: judge(ctr, cpc, roas, spend, imp) };
@@ -1165,7 +1171,7 @@ function applyJasamol() {
 function sortBy(key) {
   document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
   const ths = document.querySelectorAll('thead th');
-  const keys = ['name','product','adStatus','runDays','ctr','cpc','roas','spend','imp','judgment'];
+  const keys = ['name','product','adStatus','runDays','ctr','cpc','roas','spend','imp','freq','linkClick','judgment'];
   const idx  = keys.indexOf(key);
   if (idx >= 0) ths[idx].classList.add('sorted');
   if (sortKey === key) sortDir *= -1;
@@ -1498,6 +1504,8 @@ function renderTable(rows) {
       <td class="${roasCls}">${r.roas > 0 ? r.roas.toFixed(1)+'x' : '-'}</td>
       <td class="${spendCls}">${spendDisp} <span class="${tier.cls}" style="font-size:10px">(${tier.txt})</span></td>
       <td class="${impCls}">${impDisp} <span class="${impTierL.cls}" style="font-size:10px">(${impTierL.txt})</span></td>
+      <td class="num ${r.freq >= 3 ? 'warn' : r.freq >= 2 ? '' : 'good'}" style="text-align:center">${r.freq > 0 ? r.freq.toFixed(2) : '-'}</td>
+      <td class="num" style="text-align:right">${r.linkClick > 0 ? r.linkClick.toLocaleString() : '-'}</td>
       <td><span class="badge ${jm.cls}">${jm.label}</span></td>
     </tr>`;
   }).join('');
