@@ -575,6 +575,19 @@
       </select>
     </div>
     <div class="filter-right" id="result-count"></div>
+    <button id="spend-summary-btn" onclick="toggleSpendSummary()"
+      style="display:none;margin-left:8px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">
+      📦 상품별 광고비
+    </button>
+  </div>
+
+  <!-- 상품별 광고비 드롭다운 -->
+  <div id="spend-summary-panel" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div style="font-size:13px;font-weight:600">📦 상품별 광고비 (필터 적용 소재 기준)</div>
+      <button onclick="toggleSpendSummary()" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div id="spend-summary-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
   </div>
 
   <!-- 상품별 요약 테이블 -->
@@ -1296,6 +1309,7 @@ function applyFilters() {
 
   renderKPI(rows);
   renderProductSummary();
+  renderSpendSummary(rows);
   renderTable(rows);
   document.getElementById('result-count').textContent = rows.length.toLocaleString() + '개 소재';
 }
@@ -1364,6 +1378,48 @@ function renderProductSummary() {
   </tr>`;
 
   tbody.innerHTML = rows;
+}
+
+/* ── 상품별 광고비 요약 패널 ── */
+function toggleSpendSummary() {
+  const panel = document.getElementById('spend-summary-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function renderSpendSummary(rows) {
+  // 버튼 표시 (데이터 있으면)
+  const btn = document.getElementById('spend-summary-btn');
+  if (rows.length > 0) btn.style.display = 'block';
+  else { btn.style.display = 'none'; return; }
+
+  // 상품별 광고비 집계
+  const productSpend = {};
+  rows.forEach(r => {
+    if (!productSpend[r.product]) productSpend[r.product] = 0;
+    productSpend[r.product] += r.spend;
+  });
+
+  const totalSpend = Object.values(productSpend).reduce((s,v) => s+v, 0);
+  const sorted = Object.entries(productSpend).sort((a,b) => b[1]-a[1]);
+
+  const body = document.getElementById('spend-summary-body');
+  body.innerHTML = sorted.map(([product, spend]) => {
+    const pct = totalSpend > 0 ? (spend / totalSpend * 100) : 0;
+    const barColor = spend > 2000000 ? '#c62828' : spend > 500000 ? '#e65100' : 'var(--green-700)';
+    return `<div style="background:var(--bg);border-radius:8px;padding:.75rem 1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px">${product}</div>
+      <div style="font-size:16px;font-weight:700;color:${barColor};font-family:var(--font-data)">₩${Math.round(spend/10000)}만</div>
+      <div style="margin-top:5px;background:var(--border);border-radius:4px;height:4px">
+        <div style="width:${pct.toFixed(1)}%;background:${barColor};height:4px;border-radius:4px"></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px">${pct.toFixed(1)}%</div>
+    </div>`;
+  }).join('') +
+  `<div style="background:var(--navy);border-radius:8px;padding:.75rem 1rem">
+    <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);margin-bottom:4px">합계</div>
+    <div style="font-size:16px;font-weight:700;color:#fff;font-family:var(--font-data)">₩${Math.round(totalSpend/10000)}만</div>
+    <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:8px">${rows.length}개 소재 기준</div>
+  </div>`;
 }
 
 /* ── KPI 렌더 ── */
